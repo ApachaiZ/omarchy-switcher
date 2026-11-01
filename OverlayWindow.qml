@@ -126,7 +126,7 @@ PanelWindow {
         id: strip
         visible: service.groups.length > 0
         width: Math.min(cardRow.implicitWidth, panel.width - Style.space(56))
-        height: visible ? 194 : 0
+        height: visible ? 198 : 0
         contentWidth: cardRow.implicitWidth
         contentHeight: height
         clip: true
@@ -164,7 +164,7 @@ PanelWindow {
               readonly property bool isSelected: service.selected === index
 
               width: 136
-              height: 194
+              height: 198
 
               onIsSelectedChanged: if (isSelected) strip.reveal(cardItem.x, cardItem.width)
 
@@ -201,7 +201,7 @@ PanelWindow {
               }
 
               Rectangle {
-                y: 54
+                y: 58
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: 112
                 height: 112
@@ -280,8 +280,8 @@ PanelWindow {
                 visible: cardItem.group.entries.length > 1
                 anchors.horizontalCenter: parent.horizontalCenter
                 // The selected card scales to 1.08, so its bottom edge reaches
-                // ~170 px. Keep the chevron clear of it.
-                y: 174
+                // ~174 px. Keep the chevron clear of it.
+                y: 178
                 text: "▾ " + cardItem.group.entries.length
                 color: cardItem.isSelected
                   ? service.accent
