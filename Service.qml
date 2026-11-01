@@ -286,20 +286,21 @@ Item {
     if (!entry) return ""
     var candidates = [entry.appId, entry.cls]
     for (var i = 0; i < candidates.length; i++) {
-      var name = String(candidates[i] || "").trim()
+      var name = Model.safeIconName(candidates[i])
       if (!name) continue
       try {
         var desktop = DesktopEntries.byId(name)
         if (desktop && desktop.icon) {
-          var found = Quickshell.iconPath(desktop.icon, true)
+          var iconName = Model.safeIconName(desktop.icon)
+          var found = iconName ? Model.safeIconSource(Quickshell.iconPath(iconName, true)) : ""
           if (found) return found
         }
       } catch (e) {
       }
-      var direct = Quickshell.iconPath(name, true)
+      var direct = Model.safeIconSource(Quickshell.iconPath(name, true))
       if (direct) return direct
     }
-    return Quickshell.iconPath("application-x-executable", true)
+    return Model.safeIconSource(Quickshell.iconPath("application-x-executable", true))
   }
 
   function appLabel(entry) {

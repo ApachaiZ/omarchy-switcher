@@ -12,6 +12,16 @@ work directly with [Dropdown](https://github.com/ApachaiZ/omarchy-dropdown).
   contexts are immediately distinguishable.
 - No screen capture. Icons are local; titles are rendered as plain text.
 
+![Switcher — all windows](docs/screenshots/switcher-all.png)
+
+## Screenshots
+
+| All windows | Dropdown windows |
+| --- | --- |
+| ![All windows](docs/screenshots/switcher-all.png) | ![Dropdown windows](docs/screenshots/switcher-dropdown.png) |
+
+![Settings](docs/screenshots/switcher-settings.png)
+
 ## Install
 
 ```bash
@@ -105,8 +115,9 @@ enabling Switcher.
 - No network access, no screen capture, no window thumbnails.
 - Window titles are rendered with `Text.PlainText`; markup or image tags in a
   title are displayed literally and never fetched.
-- Icons come only from `DesktopEntries` and `Quickshell.iconPath`; no title,
-  class or path is used as a URL.
+- Icons come only from `DesktopEntries` and `Quickshell.iconPath`; icon names
+  are restricted to desktop-entry syntax and `Image.source` accepts only local
+  paths, `file://` or `image://`. No title, class or path is used as a URL.
 - Window addresses are validated as `0x` hex before any Hyprland dispatch.
 - Dropdown app ids are validated before being passed as a separate argv
   element; no shell command is built from window data.
@@ -114,6 +125,8 @@ enabling Switcher.
 - The IPC `status` method exposes counts and the selected index, never window
   titles or app ids.
 - No history, screenshots or window contents are written to disk.
+- `tests/qml-security.test.mjs` enforces plain text on every `Text`, forbids
+  `ScreencopyView` and rejects shell command strings.
 
 ## Performance
 

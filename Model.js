@@ -40,6 +40,24 @@ function parseDropdownState(raw) {
   return out
 }
 
+// Icon names that reach Quickshell.iconPath are restricted to a desktop-entry
+// style name: no slash, colon, URL, traversal or whitespace. This keeps an
+// app-controlled class or title from becoming an image path.
+function safeIconName(value) {
+  var text = String(value || "").trim()
+  return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(text) ? text : ""
+}
+
+// Only local image sources can reach Image.source. File paths and the
+// in-process image provider are accepted; remote schemes are rejected.
+function safeIconSource(value) {
+  var text = String(value || "").trim()
+  if (!text) return ""
+  if (text.indexOf("file://") === 0 || text.indexOf("image://") === 0) return text
+  if (text.charAt(0) === "/") return text
+  return ""
+}
+
 // Build the flat card list. One card per window, most recently focused first.
 // mode "dropdown" keeps only windows whose address is present in the Dropdown
 // state map; mode "all" keeps every mapped window.
@@ -157,6 +175,8 @@ if (typeof module !== "undefined") {
   module.exports = {
     validAddress: validAddress,
     validAppId: validAppId,
+    safeIconName: safeIconName,
+    safeIconSource: safeIconSource,
     parseDropdownState: parseDropdownState,
     parseClients: parseClients,
     initialIndex: initialIndex,
