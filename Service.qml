@@ -1,9 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import Quickshell.Wayland
 import Quickshell.Hyprland
-import qs.Commons
 import qs.Commons as Commons
 import "Model.js" as Model
 
@@ -14,25 +12,28 @@ Item {
   property string mode: "all"
   property bool open: false
   property var entries: []
+  // One card per application; selected indexes groups, not windows.
+  readonly property var groups: Model.groupEntries(entries)
+  readonly property var selectedGroup: groups[selected] || null
   property int selected: -1
+  property bool expanded: false
+  property int subIndex: 0
   property var dropdownWindows: ({})
   property var settings: Model.defaultSettings()
   property string pendingMode: "all"
   property bool pendingReverse: false
   property bool sawKeyEvent: false
-  property bool modsHeld: false
-  property var heldKeys: ({})
   property var pendingEntry: null
   property bool dropdownEnabled: false
 
   readonly property string home: Quickshell.env("HOME")
   readonly property string settingsPath: home + "/.config/omarchy/switcher.json"
-  readonly property string bindsPath: home + "/.config/hypr/switcher.lua"
   readonly property string dropdownStatePath: home + "/.local/state/omarchy/dropdown-state.json"
+
+  property bool settingsLoaded: false
   readonly property color themeAccent: Commons.Color.accent
   readonly property color popupText: Commons.Color.popups.text
   readonly property color popupBackground: Commons.Color.popups.background
-  readonly property color popupBorder: Commons.Color.popups.border
   // Keep the Dropdown mode clearly distinct without leaving the active theme:
   // rotate the theme accent's hue toward violet and reuse its saturation.
   readonly property color accent: mode === "dropdown"
@@ -41,6 +42,8 @@ Item {
         Math.min(0.72, themeAccent.hslLightness + 0.06), 1.0)
     : themeAccent
   readonly property string modeLabel: mode === "dropdown" ? "DROPDOWN WINDOWS" : "WINDOWS"
+  readonly property var allPresets: Model.allShortcutPresets()
+  readonly property var allPreset: Model.allPresetForKey(settings.allShortcut)
   readonly property var presets: Model.shortcutPresets()
   readonly property var dropdownPreset: Model.presetForKey(settings.dropdownShortcut)
   readonly property bool dropdownUsesSuper: dropdownPreset.key.indexOf("SUPER") === 0
@@ -51,10 +54,12 @@ Item {
     var parts = []
     if (mode === "dropdown") parts.push(dropdownPreset.label)
     else {
-      parts.push("Alt+Tab")
+      parts.push(allPreset.label)
       if (dropdownEnabled) parts.push(dropdownPreset.label + " for Dropdown")
     }
     parts.push("Tab/Shift+Tab")
+    if (selectedGroup && selectedGroup.entries.length > 1)
+      parts.push(expanded ? "↑/↓ windows" : "↓ windows")
     parts.push("Enter")
     parts.push("Esc")
     parts.push(settingsHint + " settings")
@@ -88,31 +93,42 @@ Item {
     return Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
   }
 
-  readonly property var displayScreens: {
-    if (settings.followActive)
-      return activeScreenName ? [activeScreenName] : []
-    var valid = []
-    for (var i = 0; i < screenNames.length; i++)
-      if (settings.screens.indexOf(screenNames[i]) !== -1) valid.push(screenNames[i])
-    if (valid.length === 0 && activeScreenName) valid = [activeScreenName]
-    return valid
-  }
+  // "Active screen only" renders on the focused monitor; otherwise only the
+  // selected screens, with the focused one as a fallback when the selection is
+  // not connected.
+  readonly property var displayScreens: Model.displayScreensFor(settings, screenNames, activeScreenName)
 
-  readonly property string focusScreenName: {
-    if (activeScreenName && displayScreens.indexOf(activeScreenName) !== -1) return activeScreenName
-    return displayScreens.length > 0 ? displayScreens[0] : activeScreenName
-  }
+  // When the overlay is mirrored only on other screens, the focused monitor
+  // still needs a surface to own the keyboard; otherwise arrows and Tab reach
+  // the window underneath. InputSurface provides that without drawing there.
+  readonly property bool needsInputSurface: root.open && root.mode !== "settings"
+    && root.activeScreenName !== "" && root.displayScreens.indexOf(root.activeScreenName) === -1
 
   readonly property var settingsItems: {
     var items = []
+    for (var a = 0; a < allPresets.length; a++)
+      items.push({ kind: "allPreset", preset: allPresets[a], label: allPresets[a].label, itemIndex: items.length })
     for (var p = 0; p < presets.length; p++)
-      items.push({ kind: "preset", preset: presets[p], label: presets[p].label })
-    items.push({ kind: "active", label: "Active screen only", selected: settings.followActive })
+      items.push({ kind: "preset", preset: presets[p], label: presets[p].label, itemIndex: items.length })
+    items.push({ kind: "active", label: "Active screen only", selected: settings.followActive, itemIndex: items.length })
     for (var i = 0; i < screenNames.length; i++)
       items.push({ kind: "screen", name: screenNames[i], label: screenNames[i],
-        selected: settings.screens.indexOf(screenNames[i]) !== -1 })
+        selected: settings.screens.indexOf(screenNames[i]) !== -1, itemIndex: items.length })
     return items
   }
+
+  readonly property var allItems: settingsItems.filter(function(item) { return item.kind === "allPreset" })
+  readonly property var dropdownItems: settingsItems.filter(function(item) { return item.kind === "preset" })
+  readonly property var displayItems: settingsItems.filter(function(item) {
+    return item.kind === "active" || item.kind === "screen"
+  })
+
+  // Read-only projection of HyprBinds for the settings panel, which is a
+  // separate component and cannot reference this file's ids.
+  readonly property string bindsMode: hyprBinds.mode
+  readonly property string bindsStatus: hyprBinds.status
+  readonly property string bindsError: hyprBinds.lastError
+  readonly property var bindsConflicts: hyprBinds.conflicts
 
   Component.onCompleted: {
     settingsFile.reload()
@@ -120,13 +136,26 @@ Item {
     shellConfigFile.reload()
   }
 
+  HyprBinds {
+    id: hyprBinds
+    settings: root.settings
+    dropdownEnabled: root.dropdownEnabled
+    settingsLoaded: root.settingsLoaded
+  }
+
   FileView {
     id: settingsFile
     path: root.settingsPath
     watchChanges: true
     printErrors: false
-    onLoaded: root.settings = Model.parseSettings(text())
-    onLoadFailed: root.settings = Model.defaultSettings()
+    onLoaded: {
+      root.settings = Model.parseSettings(text())
+      root.settingsLoaded = true
+    }
+    onLoadFailed: {
+      root.settings = Model.defaultSettings()
+      root.settingsLoaded = true
+    }
     onFileChanged: reload()
   }
 
@@ -146,17 +175,31 @@ Item {
     watchChanges: true
     printErrors: false
     onLoaded: {
-      root.dropdownEnabled = Model.dropdownEnabledFromShellConfig(text())
-      if (!root.dropdownEnabled && root.open && root.mode === "dropdown") root.cancel()
+      var enabled = Model.dropdownEnabledFromShellConfig(text())
+      root.dropdownEnabled = enabled
+      if (!enabled && root.open && root.mode === "dropdown") root.cancel()
     }
     onLoadFailed: root.dropdownEnabled = false
     onFileChanged: reload()
   }
 
+  // Writable only: HyprBinds owns detection and registration. This view keeps
+  // the optional static file in sync with the chosen shortcuts.
   FileView {
     id: bindsFile
-    path: root.bindsPath
+    path: hyprBinds.staticPath
     printErrors: false
+  }
+
+  // Theme switches can change the icon theme without restarting the shell.
+  FileView {
+    path: root.home + "/.config/omarchy/current/theme.name"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: {
+      root.clearIconCache()
+      reload()
+    }
   }
 
   Process {
@@ -192,7 +235,7 @@ Item {
     ? (dropdownUsesSuper
       ? 'hl.is_key_down("Super_L") or hl.is_key_down("Super_R")'
       : 'hl.is_key_down("Control_L") or hl.is_key_down("Control_R")')
-    : 'hl.is_key_down("Alt_L") or hl.is_key_down("Alt_R")' 
+    : 'hl.is_key_down("Alt_L") or hl.is_key_down("Alt_R")'
 
   Timer {
     id: modTimer
@@ -222,14 +265,15 @@ Item {
   function onClients(raw) {
     if (!root.pendingMode) return
     var list = Model.parseClients(raw, root.dropdownWindows, root.pendingMode)
+    var grouped = Model.groupEntries(list)
     root.entries = list
     root.mode = root.pendingMode
     root.pendingMode = root.mode
-    root.selected = Model.initialIndex(list.length, root.pendingReverse)
+    root.selected = Model.initialIndex(grouped.length, root.pendingReverse)
+    root.expanded = false
+    root.subIndex = 0
     root.pendingReverse = false
     root.sawKeyEvent = false
-    root.modsHeld = false
-    root.heldKeys = ({})
     root.open = true
     modTimer.restart()
   }
@@ -263,8 +307,38 @@ Item {
   }
 
   function cycle(delta) {
-    if (!root.entries.length || root.selected < 0) return
-    root.selected = (root.selected + delta + root.entries.length) % root.entries.length
+    if (!root.groups.length || root.selected < 0) return
+    root.expanded = false
+    root.subIndex = 0
+    root.selected = (root.selected + delta + root.groups.length) % root.groups.length
+  }
+
+  // GNOME-style submenu for applications with several windows: Down opens it
+  // on the selected card, Up/Down move inside it, Up at the first row closes
+  // it, and committing uses the highlighted window.
+  function expandSelected() {
+    var group = root.selectedGroup
+    if (!group || group.entries.length < 2) return
+    root.expanded = true
+    root.subIndex = 0
+  }
+
+  function cycleSub(delta) {
+    var group = root.selectedGroup
+    if (!group || group.entries.length === 0) return
+    root.subIndex = (root.subIndex + delta + group.entries.length) % group.entries.length
+  }
+
+  function collapseSub() {
+    if (root.subIndex > 0) root.subIndex--
+    else root.expanded = false
+  }
+
+  function selectedWindow() {
+    var group = root.selectedGroup
+    if (!group || group.entries.length === 0) return null
+    if (root.expanded) return group.entries[root.subIndex] || group.entries[0]
+    return group.entries[0]
   }
 
   function cancel() {
@@ -273,14 +347,18 @@ Item {
     root.pendingEntry = null
     root.entries = []
     root.selected = -1
+    root.expanded = false
+    root.subIndex = 0
   }
 
-  function commit() {
-    var entry = root.entries[root.selected] || null
+  function commit(target) {
+    var entry = target !== undefined ? target : root.selectedWindow()
     root.open = false
     root.pendingEntry = entry
     root.entries = []
     root.selected = -1
+    root.expanded = false
+    root.subIndex = 0
     if (entry) activationTimer.restart()
   }
 
@@ -303,9 +381,24 @@ Item {
 
   function handlePressed(event) {
     root.sawKeyEvent = true
-    root.modsHeld = (event.modifiers & (Qt.AltModifier | Qt.ControlModifier | Qt.MetaModifier)) !== 0
     if (event.key === Qt.Key_Escape) {
-      root.cancel()
+      if (root.expanded) {
+        root.expanded = false
+        root.subIndex = 0
+      } else {
+        root.cancel()
+      }
+      event.accepted = true
+      return
+    }
+    if (event.key === Qt.Key_Down) {
+      if (root.expanded) root.cycleSub(1)
+      else root.expandSelected()
+      event.accepted = true
+      return
+    }
+    if (event.key === Qt.Key_Up) {
+      if (root.expanded) root.collapseSub()
       event.accepted = true
       return
     }
@@ -347,24 +440,51 @@ Item {
 
   function handleReleased(event) {
     root.sawKeyEvent = true
+    // Only releasing the mode modifier commits. Committing on any key release
+    // made Down/Tab close the switcher as soon as Qt reported no modifier
+    // (for example on a surface that just received keyboard focus), which
+    // turned navigation into an immediate selection. Quick taps are still
+    // handled by modCheck and Enter/Space/clicks commit explicitly.
     var isSuper = root.mode === "dropdown" && root.dropdownUsesSuper
     var target = root.mode === "dropdown"
       ? (isSuper ? [Qt.Key_Meta, Qt.Key_Super_L, Qt.Key_Super_R] : [Qt.Key_Control])
       : [Qt.Key_Alt]
-    for (var i = 0; i < target.length; i++) {
+    for (var i = 0; i < target.length; i++)
       if (event.key === target[i]) {
         root.commit()
         return
       }
-    }
-    var modifier = root.mode === "dropdown"
-      ? (isSuper ? Qt.MetaModifier : Qt.ControlModifier)
-      : Qt.AltModifier
-    if ((event.modifiers & modifier) === 0) root.commit()
+  }
+
+  // Icon lookup walks desktop entries and the icon theme; the overlay is
+  // rebuilt on every open, so memoize by app id. Bounded to keep RAM flat in
+  // long sessions, and cleared when the theme changes so a new icon theme is
+  // picked up without a shell restart.
+  property var iconCache: ({})
+  property var iconCacheOrder: []
+
+  function clearIconCache() {
+    root.iconCache = ({})
+    root.iconCacheOrder = []
   }
 
   function iconFor(entry) {
     if (!entry) return ""
+    var cacheKey = String(entry.appId || entry.cls || "")
+    if (cacheKey && root.iconCache[cacheKey] !== undefined)
+      return root.iconCache[cacheKey]
+
+    var found = resolveIcon(entry)
+    if (cacheKey) {
+      if (root.iconCacheOrder.length >= 128)
+        delete root.iconCache[root.iconCacheOrder.shift()]
+      root.iconCache[cacheKey] = found
+      root.iconCacheOrder.push(cacheKey)
+    }
+    return found
+  }
+
+  function resolveIcon(entry) {
     var candidates = [entry.appId, entry.cls]
     for (var i = 0; i < candidates.length; i++) {
       var name = Model.safeIconName(candidates[i])
@@ -389,40 +509,82 @@ Item {
     return entry.appId || entry.cls || "Application"
   }
 
+  function monitorName(id) {
+    var model = Hyprland.monitors
+    var monitors = model && model.values ? model.values : []
+    for (var i = 0; i < monitors.length; i++)
+      if (Number(monitors[i].id) === Number(id)) return String(monitors[i].name || "")
+    return ""
+  }
+
+  // Monitor and workspace badge for a window. Parked Dropdown windows live on
+  // a special workspace, so label them as Dropdown instead of "special".
+  function locationFor(entry) {
+    if (!entry) return ""
+    var monitor = root.monitorName(entry.monitor)
+    var workspace = String(entry.workspace || "")
+    if (entry.hidden) workspace = "Dropdown"
+    else if (workspace.indexOf("special:") === 0) workspace = "special"
+    if (monitor && workspace) return monitor + " · " + workspace
+    return monitor || workspace
+  }
+
   function openSettings() {
     root.mode = "settings"
     root.selected = 0
     root.sawKeyEvent = false
     root.entries = []
+    root.expanded = false
+    root.subIndex = 0
     root.open = true
+    hyprBinds.refreshConflicts()
   }
 
   function applyShortcut(preset) {
-    root.settings = {
-      version: 1,
-      dropdownShortcut: preset.key,
-      followActive: root.settings.followActive,
-      screens: root.settings.screens
-    }
+    root.applyShortcuts(root.settings.allShortcut, preset.key)
+  }
+
+  function applyAllShortcut(preset) {
+    root.applyShortcuts(preset.key, root.settings.dropdownShortcut)
+  }
+
+  // parseSettings normalizes the shortcut values, resolves a collision between
+  // the all-windows and Dropdown shortcuts, and validates screen names.
+  function normalizedSettings(allShortcut, dropdownShortcut, followActive, screens) {
+    return Model.parseSettings(JSON.stringify({
+      allShortcut: allShortcut,
+      dropdownShortcut: dropdownShortcut,
+      followActive: followActive,
+      screens: screens
+    }))
+  }
+
+  function applyShortcuts(allShortcut, dropdownShortcut) {
+    root.settings = root.normalizedSettings(allShortcut, dropdownShortcut,
+      root.settings.followActive, root.settings.screens)
     settingsFile.setText(Model.serializeSettings(root.settings))
-    bindsFile.setText(Model.luaForSettings(root.settings))
+    if (hyprBinds.legacy) {
+      // Static installs keep the generated file in sync, then reload Hyprland.
+      bindsFile.setText(Model.luaForSettings(root.settings))
+      reloadTimer.restart()
+    }
+    // Runtime binds re-register when the settings object changes.
     root.cancel()
-    reloadTimer.restart()
   }
 
   function saveDisplaySettings(followActive, screens) {
-    root.settings = {
-      version: 1,
-      dropdownShortcut: root.settings.dropdownShortcut,
-      followActive: followActive,
-      screens: screens
-    }
+    root.settings = root.normalizedSettings(root.settings.allShortcut,
+      root.settings.dropdownShortcut, followActive, screens)
     settingsFile.setText(Model.serializeSettings(root.settings))
   }
 
   function activateSettingsItem(index) {
     var item = root.settingsItems[index]
     if (!item) return
+    if (item.kind === "allPreset") {
+      root.applyAllShortcut(item.preset)
+      return
+    }
     if (item.kind === "preset") {
       root.applyShortcut(item.preset)
       return
@@ -461,10 +623,25 @@ Item {
       return JSON.stringify({
         open: root.open,
         mode: root.mode,
-        count: root.entries.length,
+        count: root.groups.length,
+        windows: root.entries.length,
         selected: root.selected,
-        preset: root.settings.dropdownShortcut
+        expanded: root.expanded,
+        sub: root.subIndex,
+        preset: root.settings.dropdownShortcut,
+        allShortcut: root.settings.allShortcut,
+        binds: hyprBinds.status
       })
+    }
+
+    // Local support payload: binding health, mode and counts only. No window
+    // title, app id, screen serial or settings file content.
+    function diagnose(): string {
+      var report = hyprBinds.diagnostics()
+      report.dropdown = root.dropdownEnabled
+      report.preset = root.settings.dropdownShortcut
+      report.allShortcut = root.settings.allShortcut
+      return JSON.stringify(report)
     }
   }
 
@@ -475,273 +652,28 @@ Item {
         required property string modelData
         service: root
         screenName: modelData
-        focused: modelData === root.focusScreenName
+        focused: modelData === root.activeScreenName
+      }
+    }
+  }
+
+  Variants {
+    model: root.needsInputSurface ? [root.activeScreenName] : []
+    delegate: Component {
+      InputSurface {
+        required property string modelData
+        service: root
+        screenName: modelData
       }
     }
   }
 
   LazyLoader {
-    id: settingsLoader
     active: root.open && root.mode === "settings"
 
-    PanelWindow {
-      id: settingsWindow
-      screen: root.targetScreen
-      visible: true
-      color: "transparent"
-      exclusionMode: ExclusionMode.Ignore
-      WlrLayershell.layer: WlrLayer.Overlay
-      WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
-      WlrLayershell.namespace: "apach-switcher"
-      anchors {
-        top: true
-        bottom: true
-        left: true
-        right: true
-      }
-
-      MouseArea {
-        anchors.fill: parent
-        acceptedButtons: Qt.AllButtons
-        onClicked: root.cancel()
-      }
-
-      Rectangle {
-        id: settingsPanel
-        anchors.centerIn: parent
-        width: Style.space(500)
-        height: Math.min(settingsWindow.screen ? settingsWindow.screen.height - Style.space(80) : Style.space(700),
-          Math.max(Style.space(240), settingsColumn.implicitHeight + Style.space(40)))
-        radius: Math.max(16, Style.cornerRadius)
-        opacity: 0
-        color: Qt.rgba(root.popupBackground.r, root.popupBackground.g,
-          root.popupBackground.b, 0.98)
-        border.width: 1
-        border.color: Util.alpha(root.accent, 0.5)
-        focus: true
-        Keys.priority: Keys.BeforeItem
-        Keys.onPressed: function(event) {
-          if (event.key === Qt.Key_Escape) {
-            root.cancel()
-            event.accepted = true
-          } else if (event.key === Qt.Key_Up) {
-            root.selected = Math.max(0, root.selected - 1)
-            event.accepted = true
-          } else if (event.key === Qt.Key_Down) {
-            root.selected = Math.min(root.settingsItems.length - 1, root.selected + 1)
-            event.accepted = true
-          } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-            root.activateSettingsItem(root.selected)
-            event.accepted = true
-          }
-        }
-
-        Component.onCompleted: {
-          settingsIntro.start()
-          forceActiveFocus()
-        }
-
-        NumberAnimation {
-          id: settingsIntro
-          target: settingsPanel
-          property: "opacity"
-          from: 0
-          to: 1
-          duration: 120
-          easing.type: Easing.OutCubic
-        }
-
-        MouseArea {
-          anchors.fill: parent
-          acceptedButtons: Qt.AllButtons
-        }
-
-        Column {
-          id: settingsColumn
-          width: parent.width - Style.space(40)
-          anchors.horizontalCenter: parent.horizontalCenter
-          anchors.top: parent.top
-          anchors.topMargin: Style.space(20)
-          spacing: Style.space(10)
-
-          Text {
-            textFormat: Text.PlainText
-            width: parent.width
-            horizontalAlignment: Text.AlignHCenter
-            text: "SWITCHER — SETTINGS"
-            color: root.accent
-            font.family: Style.font.family
-            font.pixelSize: Style.font.subtitle
-            font.bold: true
-            font.letterSpacing: 1
-          }
-
-          Text {
-            textFormat: Text.PlainText
-            width: parent.width
-            horizontalAlignment: Text.AlignHCenter
-            text: "All windows: Alt + Tab"
-            color: Util.alpha(root.popupText, 0.6)
-            font.family: Style.font.family
-            font.pixelSize: Style.font.bodySmall
-          }
-
-          Text {
-            textFormat: Text.PlainText
-            width: parent.width
-            horizontalAlignment: Text.AlignHCenter
-            text: "DROPDOWN SHORTCUT"
-            color: Util.alpha(root.popupText, 0.45)
-            font.family: Style.font.family
-            font.pixelSize: Style.font.caption
-            font.bold: true
-            font.letterSpacing: 0.8
-          }
-
-          Text {
-            textFormat: Text.PlainText
-            visible: !root.dropdownEnabled
-            width: parent.width
-            horizontalAlignment: Text.AlignHCenter
-            text: "Dropdown is disabled: Ctrl+Tab is not bound."
-            color: Util.alpha(root.popupText, 0.55)
-            font.family: Style.font.family
-            font.pixelSize: Style.font.caption
-            wrapMode: Text.WordWrap
-          }
-
-          Repeater {
-            model: root.presets
-
-            Rectangle {
-              required property var modelData
-              required property int index
-              width: parent.width
-              height: Style.space(38)
-              radius: Math.max(8, Style.cornerRadius - 8)
-              color: root.selected === index
-                ? Util.alpha(root.accent, 0.16)
-                : Util.alpha(root.popupText, 0.04)
-              border.width: root.selected === index ? 1 : 0
-              border.color: root.accent
-
-              Text {
-                textFormat: Text.PlainText
-                anchors.left: parent.left
-                anchors.leftMargin: 14
-                anchors.verticalCenter: parent.verticalCenter
-                text: modelData.label
-                color: root.selected === index ? root.accent : Util.alpha(root.popupText, 0.75)
-                font.family: Style.font.family
-                font.pixelSize: 12
-                font.bold: root.selected === index
-              }
-
-              Text {
-                textFormat: Text.PlainText
-                anchors.right: parent.right
-                anchors.rightMargin: 14
-                anchors.verticalCenter: parent.verticalCenter
-                visible: root.settings.dropdownShortcut === modelData.key
-                text: "CURRENT"
-                color: root.accent
-                font.family: Style.font.family
-                font.pixelSize: Style.font.caption
-                font.bold: true
-                font.letterSpacing: 0.8
-              }
-
-              MouseArea {
-                anchors.fill: parent
-                acceptedButtons: Qt.LeftButton
-                onClicked: root.applyShortcut(modelData)
-              }
-            }
-          }
-
-          Rectangle {
-            width: parent.width
-            height: 1
-            color: Util.alpha(root.popupText, 0.12)
-          }
-
-          Text {
-            textFormat: Text.PlainText
-            width: parent.width
-            horizontalAlignment: Text.AlignHCenter
-            text: "DISPLAY"
-            color: Util.alpha(root.popupText, 0.45)
-            font.family: Style.font.family
-            font.pixelSize: Style.font.caption
-            font.bold: true
-            font.letterSpacing: 0.8
-          }
-
-          Repeater {
-            model: root.settingsItems.slice(root.presets.length)
-
-            Rectangle {
-              required property var modelData
-              required property int index
-              readonly property int itemIndex: root.presets.length + index
-              width: parent.width
-              height: Style.space(38)
-              radius: Math.max(8, Style.cornerRadius - 8)
-              color: root.selected === itemIndex
-                ? Util.alpha(root.accent, 0.16)
-                : Util.alpha(root.popupText, 0.04)
-              border.width: root.selected === itemIndex ? 1 : 0
-              border.color: root.accent
-              opacity: 1.0
-
-              Text {
-                textFormat: Text.PlainText
-                anchors.left: parent.left
-                anchors.leftMargin: 14
-                anchors.verticalCenter: parent.verticalCenter
-                text: modelData.label
-                color: root.selected === itemIndex ? root.accent : Util.alpha(root.popupText, 0.75)
-                font.family: Style.font.family
-                font.pixelSize: Style.font.body
-                font.bold: root.selected === itemIndex
-              }
-
-              Text {
-                textFormat: Text.PlainText
-                anchors.right: parent.right
-                anchors.rightMargin: 14
-                anchors.verticalCenter: parent.verticalCenter
-                text: modelData.kind === "active"
-                  ? (root.settings.followActive ? "YES" : "NO")
-                  : (modelData.selected ? "✓" : "")
-                color: root.accent
-                font.family: Style.font.family
-                font.pixelSize: Style.font.caption
-                font.bold: true
-              }
-
-              MouseArea {
-                anchors.fill: parent
-                acceptedButtons: Qt.LeftButton
-                onClicked: {
-                  root.selected = itemIndex
-                  root.activateSettingsItem(itemIndex)
-                }
-              }
-            }
-          }
-
-          Text {
-            textFormat: Text.PlainText
-            width: parent.width
-            horizontalAlignment: Text.AlignHCenter
-            text: "Esc closes · Enter applies / toggles"
-            color: Util.alpha(root.popupText, 0.4)
-            font.family: Style.font.family
-            font.pixelSize: Style.font.caption
-          }
-        }
-      }
+    SettingsPanel {
+      service: root
+      windowScreen: root.targetScreen
     }
   }
 }

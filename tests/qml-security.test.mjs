@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs"
 // Window titles, app names and Dropdown state are untrusted input. Keep the
 // same regression guard used by Dropdown/Quay: every Text is plain text, and
 // no screen capture or shell command may be introduced into the service.
-const files = ["Service.qml", "OverlayWindow.qml", "Model.js"]
+const files = ["Service.qml", "OverlayWindow.qml", "InputSurface.qml", "HyprBinds.qml", "SettingsPanel.qml", "Model.js"]
 
 function blockEnd(source, openBrace) {
   let depth = 0
@@ -59,7 +59,10 @@ function textBlocks(file) {
   return blocks
 }
 
-const blocks = textBlocks("Service.qml").concat(textBlocks("OverlayWindow.qml"))
+const blocks = textBlocks("Service.qml")
+  .concat(textBlocks("OverlayWindow.qml"))
+  .concat(textBlocks("HyprBinds.qml"))
+  .concat(textBlocks("SettingsPanel.qml"))
 
 test("every QML Text element renders plain text", () => {
   const failures = blocks
@@ -73,9 +76,29 @@ test("rich text and screen capture are never requested", () => {
     const source = readFileSync(file, "utf8")
     assert.equal(/Text\.(AutoText|RichText|StyledText)/.test(source), false, file)
     assert.equal(/ScreencopyView|ScreenCopy/.test(source), false, file)
-    assert.equal(/console\.(log|info|debug)/.test(source), false, file)
+    assert.equal(/console\./.test(source), false, file)
     assert.equal(/"?(sh|bash)"?\s*,\s*"-c"/.test(source), false, file)
   }
+})
+
+test("the bindings engine owns its shortcuts with a static-file fallback", () => {
+  const source = readFileSync("HyprBinds.qml", "utf8")
+  assert.match(source, /"hyprctl", "eval"/)
+  assert.match(source, /configreloaded/)
+  assert.match(source, /legacy/)
+  assert.match(source, /hyprUnbindEval/)
+})
+
+test("stdio collectors use the Quickshell text property, not a call", () => {
+  const source = readFileSync("HyprBinds.qml", "utf8")
+  assert.doesNotMatch(source, /\.text\(\)/)
+})
+
+test("IPC reports never expose window titles or app ids", () => {
+  const source = readFileSync("Service.qml", "utf8")
+  const ipc = source.slice(source.indexOf("IpcHandler"))
+  assert.notEqual(ipc, "")
+  assert.doesNotMatch(ipc, /\.title\b|appId|\.cls\b/)
 })
 
 test("no remote URL is embedded in the service", () => {

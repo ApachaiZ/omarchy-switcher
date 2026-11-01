@@ -33,8 +33,8 @@ test("Dropdown state maps addresses to validated app ids", () => {
 test("client parsing filters, sorts and identifies Dropdown windows", () => {
   const dropdown = { "0xaaa1": { appId: "system.terminal", cls: "apach.dropdown.terminal", hidden: true } }
   const raw = JSON.stringify([
-    { address: "0xBBB2", class: "brave-browser", title: "Later", mapped: true, focusHistoryID: 3, workspace: { name: "2" }, tags: [] },
-    { address: "0xAAA1", class: "apach.dropdown.terminal", title: "Terminal", mapped: true, focusHistoryID: 0, workspace: { name: "special:special" }, tags: ["dropdown-hidden"] },
+    { address: "0xBBB2", class: "brave-browser", title: "Later", mapped: true, focusHistoryID: 3, monitor: 1, workspace: { name: "2" }, tags: [] },
+    { address: "0xAAA1", class: "apach.dropdown.terminal", title: "Terminal", mapped: true, focusHistoryID: 0, monitor: 0, workspace: { name: "special:special" }, tags: ["dropdown-hidden"] },
     { address: "0xCCC3", class: "unmapped", title: "No", mapped: false, focusHistoryID: 1, workspace: { name: "1" }, tags: [] },
     { address: "0xDDD4", class: "apach.switcher", title: "Self", mapped: true, focusHistoryID: 1, workspace: { name: "1" }, tags: [] }
   ])
@@ -43,9 +43,31 @@ test("client parsing filters, sorts and identifies Dropdown windows", () => {
   assert.equal(all[0].addr, "0xBBB2")
   assert.equal(all[0].title, "Later")
   assert.equal(all[0].dropdown, false)
+  assert.equal(all[0].monitor, 1)
+  assert.equal(all[0].workspace, "2")
   const only = Model.parseClients(raw, dropdown, "dropdown")
   assert.equal(only.length, 1)
   assert.equal(only[0].appId, "system.terminal")
+})
+
+test("windows are grouped by application in focus order", () => {
+  const entries = [
+    { addr: "0x1", cls: "kitty", appId: "", title: "a" },
+    { addr: "0x2", cls: "brave-browser", appId: "", title: "b" },
+    { addr: "0x3", cls: "kitty", appId: "", title: "c" },
+    { addr: "0x4", cls: "", appId: "system.terminal", title: "d" },
+    { addr: "0x5", cls: "", appId: "system.terminal", title: "e" },
+    { addr: "0x6", cls: "", appId: "", title: "f" }
+  ]
+  const groups = Model.groupEntries(entries)
+  assert.equal(groups.length, 4)
+  assert.deepEqual(groups.map((g) => g.key), ["kitty", "brave-browser", "system.terminal", "0x6"])
+  assert.deepEqual(groups[0].entries.map((e) => e.addr), ["0x1", "0x3"])
+  assert.deepEqual(groups[2].entries.map((e) => e.addr), ["0x4", "0x5"])
+  assert.equal(groups[1].entries.length, 1)
+  assert.equal(groups[0].label, "kitty")
+  assert.equal(Model.groupEntries([]).length, 0)
+  assert.equal(Model.groupEntries(null).length, 0)
 })
 
 test("initial selection is the previous window, reverse starts at the end", () => {
@@ -57,10 +79,30 @@ test("initial selection is the previous window, reverse starts at the end", () =
 
 test("shortcut settings are bounded to known presets", () => {
   assert.equal(Model.defaultSettings().dropdownShortcut, "CTRL + TAB")
+  assert.equal(Model.defaultSettings().allShortcut, "ALT + TAB")
   assert.equal(Model.parseSettings('{"dropdownShortcut":"SUPER + TAB"}').dropdownShortcut, "SUPER + TAB")
   assert.equal(Model.parseSettings('{"dropdownShortcut":"CTRL + F12"}').dropdownShortcut, "CTRL + TAB")
   assert.equal(Model.parseSettings("not json").dropdownShortcut, "CTRL + TAB")
   assert.equal(Model.presetForKey("ctrl + space").key, "CTRL + SPACE")
+  assert.equal(Model.allPresetForKey("alt + grave").key, "ALT + GRAVE")
+  assert.equal(Model.allPresetForKey("SUPER + TAB").key, "ALT + TAB")
+})
+
+test("all-windows and Dropdown shortcuts never collide", () => {
+  const parsed = Model.parseSettings(JSON.stringify({
+    allShortcut: "ALT + GRAVE",
+    dropdownShortcut: "CTRL + SPACE"
+  }))
+  assert.equal(parsed.allShortcut, "ALT + GRAVE")
+  assert.equal(parsed.dropdownShortcut, "CTRL + SPACE")
+
+  const out = JSON.parse(Model.serializeSettings({
+    allShortcut: "ALT + TAB",
+    dropdownShortcut: "CTRL + TAB"
+  }))
+  assert.equal(out.allShortcut, "ALT + TAB")
+  assert.equal(out.dropdownShortcut, "CTRL + TAB")
+  assert.equal(JSON.parse(Model.serializeSettings(Model.defaultSettings())).version, 1)
 })
 
 test("generated Lua contains the selected Dropdown shortcut and layer rule", () => {
@@ -69,7 +111,88 @@ test("generated Lua contains the selected Dropdown shortcut and layer rule", () 
   assert.match(lua, /o\.bind\("SUPER \+ TAB"/)
   assert.match(lua, /o\.bind\("SUPER \+ SHIFT \+ TAB"/)
   assert.match(lua, /ALT \+ TAB/)
-  assert.match(lua, /apach\.switcher settings/)
+  // Settings open from inside the overlay (Alt+S / Ctrl+S), not from a
+  // global chord that would shadow Omarchy's scratchpad bind.
+  assert.doesNotMatch(lua, /Switcher: settings/)
+  assert.doesNotMatch(lua, /SUPER \+ ALT \+ S/)
+})
+
+test("runtime eval unbinds before binding and only binds Dropdown when enabled", () => {
+  const noDropdown = Model.hyprEvalForSettings({ dropdownShortcut: "SUPER + TAB" }, false, { layerRule: false })
+  assert.equal(noDropdown.includes("\n"), false)
+  assert.doesNotMatch(noDropdown, /layer_rule/)
+  assert.match(noDropdown, /hl\.unbind\("ALT \+ TAB"\)/)
+  assert.match(noDropdown, /hl\.unbind\("SUPER \+ TAB"\)/)
+  assert.match(noDropdown, /hl\.bind\("ALT \+ TAB", hl\.dsp\.exec_cmd\("omarchy-shell -q apach\.switcher next"\), \{ description = "Switcher: all windows" \}\)/)
+  assert.doesNotMatch(noDropdown, /hl\.bind\("SUPER \+ TAB"/)
+  assert.doesNotMatch(noDropdown, /nextDropdown|prevDropdown/)
+  assert.ok(noDropdown.indexOf("hl.unbind") < noDropdown.indexOf("hl.bind"))
+
+  const withDropdown = Model.hyprEvalForSettings({ dropdownShortcut: "SUPER + TAB" }, true)
+  assert.match(withDropdown, /hl\.layer_rule/)
+  assert.match(withDropdown, /hl\.bind\("SUPER \+ TAB".*nextDropdown/)
+  assert.match(withDropdown, /hl\.bind\("SUPER \+ SHIFT \+ TAB".*prevDropdown/)
+  assert.doesNotMatch(withDropdown, /Switcher: settings/)
+
+  // Changing the preset leaves no stale runtime bind behind.
+  const switched = Model.hyprEvalForSettings({ dropdownShortcut: "SUPER + TAB" }, true, {
+    layerRule: false,
+    previous: { allShortcut: "ALT + TAB", dropdownShortcut: "CTRL + TAB" }
+  })
+  assert.match(switched, /hl\.unbind\("CTRL \+ TAB"\)/)
+  assert.match(switched, /hl\.unbind\("CTRL \+ SHIFT \+ TAB"\)/)
+  assert.equal(Model.boundChords(
+    { dropdownShortcut: "SUPER + TAB" },
+    { allShortcut: "ALT + TAB", dropdownShortcut: "CTRL + TAB" }
+  ).length, 6)
+})
+
+test("all-windows shortcut drives the first binds and its own chords", () => {
+  const settings = { allShortcut: "ALT + GRAVE", dropdownShortcut: "CTRL + TAB" }
+  const evalCode = Model.hyprEvalForSettings(settings, false, { layerRule: false })
+  assert.match(evalCode, /hl\.bind\("ALT \+ GRAVE".*all windows/)
+  assert.match(evalCode, /hl\.bind\("ALT \+ SHIFT \+ GRAVE".*reverse windows/)
+  assert.doesNotMatch(evalCode, /hl\.bind\("ALT \+ TAB"/)
+  assert.deepEqual(Model.activeChords(settings, false), ["ALT + GRAVE", "ALT + SHIFT + GRAVE"])
+  assert.deepEqual(Model.activeChords(settings, true),
+    ["ALT + GRAVE", "ALT + SHIFT + GRAVE", "CTRL + TAB", "CTRL + SHIFT + TAB"])
+})
+
+test("live bind parsing reports missing shortcuts and real conflicts", () => {
+  const binds = [
+    { modmask: 8, key: "TAB", description: "Focus on next window" },
+    { modmask: 8, key: "TAB", description: "Switcher: all windows" },
+    { modmask: 9, key: "TAB", description: "Switcher: reverse windows" },
+    { modmask: 4, key: "TAB", description: "Terminal palette" },
+    { modmask: 4, key: "TAB", description: "Switcher: Dropdown windows" },
+    { modmask: 5, key: "TAB", description: "Switcher: reverse Dropdown windows" }
+  ]
+  const chords = ["ALT + TAB", "ALT + SHIFT + TAB", "CTRL + TAB", "CTRL + SHIFT + TAB"]
+  const result = Model.parseBinds(JSON.stringify(binds), chords)
+  assert.deepEqual(result.missing, [])
+  assert.deepEqual(result.conflicts, [{ chord: "CTRL + TAB", description: "Terminal palette" }])
+
+  const gone = Model.parseBinds(JSON.stringify(binds.slice(0, 1)), chords)
+  assert.deepEqual(gone.missing, chords)
+  assert.deepEqual(Model.parseBinds("not json", chords).missing, chords)
+
+  const grave = Model.parseBinds(JSON.stringify([
+    { modmask: 8, key: "GRAVE", description: "Switcher: all windows" },
+    { modmask: 9, key: "GRAVE", description: "Switcher: reverse windows" }
+  ]), ["ALT + GRAVE", "ALT + SHIFT + GRAVE"])
+  assert.deepEqual(grave.missing, [])
+})
+
+test("runtime unbind removes every chord the plugin may own", () => {
+  const unbind = Model.hyprUnbindEval({ dropdownShortcut: "CTRL + SPACE" })
+  assert.equal(unbind.includes("\n"), false)
+  assert.doesNotMatch(unbind, /hl\.bind/)
+  for (const chord of ["ALT + TAB", "ALT + SHIFT + TAB", "CTRL + SPACE", "CTRL + SHIFT + SPACE"])
+    assert.match(unbind, new RegExp(`hl\\.unbind\\("${chord.replace(/[+]/g, "\\+")}"\\)`))
+  // The global settings chord is gone on purpose: Omarchy uses it for the
+  // scratchpad, and settings are reachable with Alt+S inside the overlay.
+  assert.doesNotMatch(unbind, /SUPER \+ ALT \+ S/)
+  assert.equal(Model.boundChords({ dropdownShortcut: "CTRL + SPACE" }).length, 4)
 })
 
 test("icon names and sources are restricted to local values", () => {
@@ -83,6 +206,32 @@ test("icon names and sources are restricted to local values", () => {
   assert.equal(Model.safeIconSource("image://provider/icon"), "image://provider/icon")
   assert.equal(Model.safeIconSource("https://tracker.example/x.png"), "")
   assert.equal(Model.safeIconSource("data:image/png;base64,AAAA"), "")
+})
+
+test("the display selection is honoured, focused screen included only by choice", () => {
+  const screens = ["HDMI-A-1", "HDMI-A-2", "eDP-1"]
+  assert.deepEqual(Model.displayScreensFor({ followActive: true, screens: [] }, screens, "HDMI-A-2"), ["HDMI-A-2"])
+  assert.deepEqual(Model.displayScreensFor({ followActive: true, screens: ["HDMI-A-1"] }, screens, "HDMI-A-2"), ["HDMI-A-2"])
+  // Active screen only off: selected screens win, even when the focused
+  // monitor is not part of the selection.
+  assert.deepEqual(
+    Model.displayScreensFor({ followActive: false, screens: ["HDMI-A-1"] }, screens, "HDMI-A-2"),
+    ["HDMI-A-1"]
+  )
+  assert.deepEqual(
+    Model.displayScreensFor({ followActive: false, screens: ["HDMI-A-2"] }, screens, "HDMI-A-2"),
+    ["HDMI-A-2"]
+  )
+  assert.deepEqual(
+    Model.displayScreensFor({ followActive: false, screens: ["../bad", "eDP-1"] }, screens, ""),
+    ["eDP-1"]
+  )
+  // Fallback only when no selected screen exists.
+  assert.deepEqual(
+    Model.displayScreensFor({ followActive: false, screens: [] }, screens, "HDMI-A-2"),
+    ["HDMI-A-2"]
+  )
+  assert.deepEqual(Model.displayScreensFor({ followActive: true, screens: [] }, screens, ""), [])
 })
 
 test("screen selection settings are validated and serialized", () => {
@@ -100,11 +249,43 @@ test("screen selection settings are validated and serialized", () => {
   assert.deepEqual(out.screens, ["HDMI-A-1", "HDMI-A-2", "eDP-1"])
 })
 
-test("Dropdown is detected from the shell bar layout", () => {
+test("Dropdown is detected from the bar layout or the enabled plugin list", () => {
   const enabled = JSON.stringify({ bar: { layout: { center: [{ id: "apach.dropdown" }] } } })
   assert.equal(Model.dropdownEnabledFromShellConfig(enabled), true)
   assert.equal(Model.dropdownEnabledFromShellConfig(JSON.stringify({ bar: { layout: { right: [{ id: "apach.dropdown" }] } } })), true)
   assert.equal(Model.dropdownEnabledFromShellConfig(JSON.stringify({ bar: { layout: { center: [] } } })), false)
   assert.equal(Model.dropdownEnabledFromShellConfig(JSON.stringify({ bar: { layout: { center: [{ id: "apach.dropdown" }] } }, disabledPlugins: ["apach.dropdown"] })), false)
   assert.equal(Model.dropdownEnabledFromShellConfig("not json"), false)
+  // Service-only Dropdown: enabled, but not placed in the bar.
+  assert.equal(Model.dropdownEnabledFromShellConfig(JSON.stringify({
+    plugins: [{ id: "apach.dropdown" }]
+  })), true)
+  assert.equal(Model.dropdownEnabledFromShellConfig(JSON.stringify({
+    plugins: [{ id: "apach.dropdown" }],
+    disabledPlugins: ["apach.dropdown"]
+  })), false)
+})
+
+test("static and runtime generators publish the same bind table", () => {
+  const settings = { allShortcut: "ALT + TAB", dropdownShortcut: "CTRL + SPACE" }
+  const lua = Model.luaForSettings(settings)
+  const evalCode = Model.hyprEvalForSettings(settings, true, { layerRule: false })
+  const luaBinds = [...lua.matchAll(/o\.bind\("([^"]+)", "([^"]+)"/g)].map((m) => `${m[1]}|${m[2]}`)
+  const evalBinds = [...evalCode.matchAll(/hl\.bind\("([^"]+)".*?description = "([^"]+)"/g)]
+    .map((m) => `${m[1]}|${m[2]}`)
+  assert.deepEqual(evalBinds, luaBinds)
+  assert.equal(luaBinds.length, 4)
+})
+
+test("generated expressions only contain the validated preset table", () => {
+  const injected = {
+    allShortcut: 'ALT + TAB"); os.execute("rm -rf /',
+    dropdownShortcut: '"; error("boom'
+  }
+  const code = Model.hyprEvalForSettings(injected, true, { layerRule: true, previous: null })
+  assert.doesNotMatch(code, /os\.execute|rm -rf|error\("boom/)
+  assert.match(code, /hl\.bind\("ALT \+ TAB"/)
+  assert.match(code, /hl\.bind\("CTRL \+ TAB"/)
+  assert.match(code, /hl\.unbind\("ALT \+ TAB"\)/)
+  assert.doesNotMatch(code, /\n/)
 })

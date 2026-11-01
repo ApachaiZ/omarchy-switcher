@@ -66,17 +66,26 @@ function dropdownEnabledFromShellConfig(raw) {
     if (!config || typeof config !== "object") return false
     var disabled = Array.isArray(config.disabledPlugins) ? config.disabledPlugins : []
     if (disabled.indexOf("apach.dropdown") !== -1) return false
+    // Dropdown is a bar widget, so its id normally appears in bar.layout.*.
+    // It can also be enabled as a service/overlay without a bar placement;
+    // those live in the plugins array.
     var layout = config.bar && config.bar.layout
-    if (!layout || typeof layout !== "object") return false
     var sections = ["left", "center", "right"]
-    for (var s = 0; s < sections.length; s++) {
-      var list = layout[sections[s]]
-      if (!Array.isArray(list)) continue
-      for (var i = 0; i < list.length; i++) {
-        var entry = list[i]
-        var id = entry && typeof entry === "object" ? String(entry.id || "") : String(entry || "")
-        if (id === "apach.dropdown") return true
+    if (layout && typeof layout === "object") {
+      for (var s = 0; s < sections.length; s++) {
+        var list = layout[sections[s]]
+        if (!Array.isArray(list)) continue
+        for (var i = 0; i < list.length; i++) {
+          var entry = list[i]
+          var id = entry && typeof entry === "object" ? String(entry.id || "") : String(entry || "")
+          if (id === "apach.dropdown") return true
+        }
       }
+    }
+    var plugins = Array.isArray(config.plugins) ? config.plugins : []
+    for (var p = 0; p < plugins.length; p++) {
+      var plugin = plugins[p]
+      if (plugin && String(plugin.id || "") === "apach.dropdown") return true
     }
   } catch (e) {
   }
@@ -111,6 +120,8 @@ function parseClients(raw, dropdownWindows, mode) {
         workspace.indexOf("special:") === 0
       var focus = Number(client.focusHistoryID)
       if (!isFinite(focus)) focus = 9999
+      var monitor = Number(client.monitor)
+      if (!isFinite(monitor)) monitor = -1
       list.push({
         addr: address,
         cls: cls,
@@ -119,6 +130,7 @@ function parseClients(raw, dropdownWindows, mode) {
         dropdown: !!dropdown,
         hidden: hidden,
         focus: focus,
+        monitor: monitor,
         workspace: workspace
       })
     }
@@ -133,6 +145,36 @@ function parseClients(raw, dropdownWindows, mode) {
 
 // Classic Alt-Tab starts on the previous window, not the current one; a
 // reverse summon starts on the oldest entry.
+// GNOME-style grouping: one card per application. Groups keep the focus order
+// of the window list (the first window of a group is its most recent one), and
+// windows inside a group stay in the same order. An entry without appId or
+// class falls back to its address so it still gets its own card.
+function groupEntries(entries) {
+  var list = Array.isArray(entries) ? entries : []
+  var groups = []
+  var byKey = {}
+  for (var i = 0; i < list.length; i++) {
+    var entry = list[i]
+    if (!entry) continue
+    var key = String(entry.appId || entry.cls || entry.addr || "")
+    if (!key) continue
+    var group = byKey[key]
+    if (!group) {
+      group = {
+        key: key,
+        appId: String(entry.appId || ""),
+        cls: String(entry.cls || ""),
+        label: String(entry.appId || entry.cls || entry.title || "Application"),
+        entries: []
+      }
+      byKey[key] = group
+      groups.push(group)
+    }
+    group.entries.push(entry)
+  }
+  return groups
+}
+
 function initialIndex(length, reverse) {
   if (!length) return -1
   if (reverse) return length - 1
@@ -147,13 +189,74 @@ function shortcutPresets() {
   ]
 }
 
+// Only chords that Omarchy leaves free by default. Super+Tab is deliberately
+// absent: Omarchy uses it for "next workspace".
+function allShortcutPresets() {
+  return [
+    { id: "alt-tab", label: "Alt + Tab", key: "ALT + TAB", reverse: "ALT + SHIFT + TAB" },
+    { id: "alt-grave", label: "Alt + `", key: "ALT + GRAVE", reverse: "ALT + SHIFT + GRAVE" }
+  ]
+}
+
+function allPresetForKey(key) {
+  var wanted = String(key || "").trim().toUpperCase()
+  var presets = allShortcutPresets()
+  for (var i = 0; i < presets.length; i++)
+    if (presets[i].key === wanted) return presets[i]
+  return presets[0]
+}
+
 function safeScreenName(value) {
   var text = String(value || "").trim()
   return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(text) ? text : ""
 }
 
+// Screens the overlay is rendered on. "Active screen only" means exactly the
+// focused monitor; when it is off, only the selected screens are rendered.
+// The focused monitor is a fallback only when no selected screen is currently
+// connected, so a stale selection cannot leave the switcher with no surface.
+function displayScreensFor(settings, screenNames, activeName) {
+  var value = settings || defaultSettings()
+  var available = Array.isArray(screenNames) ? screenNames : []
+  var active = String(activeName || "")
+
+  if (value.followActive) return active ? [active] : []
+
+  var wanted = Array.isArray(value.screens) ? value.screens : []
+  var out = []
+  for (var i = 0; i < available.length; i++) {
+    var name = String(available[i] || "")
+    if (name && wanted.indexOf(name) !== -1 && out.indexOf(name) === -1) out.push(name)
+  }
+  if (out.length === 0 && active) out.push(active)
+  return out
+}
+
+function nonCollidingPreset(key) {
+  var presets = shortcutPresets()
+  for (var i = 0; i < presets.length; i++)
+    if (presets[i].key !== key) return presets[i]
+  return presets[0]
+}
+
+// The all-windows and Dropdown shortcuts must never be the same chord: one
+// would silently mask the other.
+function normalizedShortcuts(value) {
+  var source = value || {}
+  var allShortcut = allPresetForKey(source.allShortcut).key
+  var dropdownShortcut = presetForKey(source.dropdownShortcut).key
+  if (dropdownShortcut === allShortcut) dropdownShortcut = nonCollidingPreset(allShortcut).key
+  return { allShortcut: allShortcut, dropdownShortcut: dropdownShortcut }
+}
+
 function defaultSettings() {
-  return { version: 1, dropdownShortcut: "CTRL + TAB", followActive: true, screens: [] }
+  return {
+    version: 1,
+    allShortcut: "ALT + TAB",
+    dropdownShortcut: "CTRL + TAB",
+    followActive: true,
+    screens: []
+  }
 }
 
 function presetForKey(key) {
@@ -175,9 +278,11 @@ function parseSettings(raw) {
         if (name && screens.indexOf(name) === -1) screens.push(name)
       }
     }
+    var shortcuts = normalizedShortcuts(parsed)
     return {
       version: 1,
-      dropdownShortcut: presetForKey(parsed.dropdownShortcut).key,
+      allShortcut: shortcuts.allShortcut,
+      dropdownShortcut: shortcuts.dropdownShortcut,
       followActive: parsed.followActive !== false,
       screens: screens
     }
@@ -195,61 +300,274 @@ function serializeSettings(settings) {
       if (name && screens.indexOf(name) === -1) screens.push(name)
     }
   }
+  var shortcuts = normalizedShortcuts(value)
   return JSON.stringify({
     version: 1,
-    dropdownShortcut: presetForKey(value.dropdownShortcut).key,
+    allShortcut: shortcuts.allShortcut,
+    dropdownShortcut: shortcuts.dropdownShortcut,
     followActive: value.followActive !== false,
     screens: screens
   }, null, 2) + "\n"
 }
 
-// Generated Hyprland Lua. The inline file is intentionally small and contains
-// no user data. Settings writes the same template with the chosen shortcut.
+function layerRuleLine() {
+  return 'hl.layer_rule({ match = { namespace = "apach-switcher" }, blur = true, ignore_alpha = 0.15, no_anim = true })'
+}
+
+// Generated Hyprland Lua for the optional static install. The inline file is
+// intentionally small and contains no user data. The bind table comes from the
+// same entries as the runtime eval, so both modes cannot drift apart.
 function luaForSettings(settings) {
-  var preset = presetForKey((settings || defaultSettings()).dropdownShortcut)
-  return [
+  var chords = boundChords(settings)
+  var binds = bindEntries(settings, true)
+  var lines = [
     "-- Generated by apach.switcher. Edit the shortcut in Switcher settings.",
-    'hl.layer_rule({ match = { namespace = "apach-switcher" }, blur = true, ignore_alpha = 0.15, no_anim = true })',
-    "",
-    'hl.unbind("ALT + TAB")',
-    'hl.unbind("ALT + SHIFT + TAB")',
-    'hl.unbind("' + preset.key + '")',
-    'hl.unbind("' + preset.reverse + '")',
-    "",
-    'o.bind("ALT + TAB", "Switcher: all windows", "omarchy-shell -q apach.switcher next")',
-    'o.bind("ALT + SHIFT + TAB", "Switcher: reverse windows", "omarchy-shell -q apach.switcher prev")',
-    'local function switcherHasDropdown()',
-    '  local file = io.open(os.getenv("HOME") .. "/.config/omarchy/shell.json", "r")',
-    '  if not file then return false end',
-    '  local data = file:read("*a") or ""',
-    '  file:close()',
-    '  return data:find(\'"apach.dropdown"\', 1, true) ~= nil',
-    'end',
-    'if switcherHasDropdown() then',
-    '  o.bind("' + preset.key + '", "Switcher: Dropdown windows", "omarchy-shell -q apach.switcher nextDropdown")',
-    '  o.bind("' + preset.reverse + '", "Switcher: reverse Dropdown windows", "omarchy-shell -q apach.switcher prevDropdown")',
-    'end',
-    'o.bind("SUPER + ALT + S", "Switcher: settings", "omarchy-shell -q apach.switcher settings")',
+    layerRuleLine(),
     ""
-  ].join("\n")
+  ]
+
+  for (var i = 0; i < chords.length; i++)
+    lines.push("hl.unbind(" + luaString(chords[i]) + ")")
+  lines.push("")
+
+  for (var j = 0; j < binds.length; j++)
+    if (!binds[j].dropdown) lines.push(oBindLine(binds[j]))
+
+  // Dropdown is a separate plugin: Hyprland reads shell.json once at load time
+  // instead of watching it like the running service does.
+  lines.push(
+    "local function switcherHasDropdown()",
+    '  local file = io.open(os.getenv("HOME") .. "/.config/omarchy/shell.json", "r")',
+    "  if not file then return false end",
+    '  local data = file:read("*a") or ""',
+    "  file:close()",
+    '  return data:find(\'"apach.dropdown"\', 1, true) ~= nil',
+    "end",
+    "if switcherHasDropdown() then"
+  )
+  for (var k = 0; k < binds.length; k++)
+    if (binds[k].dropdown) lines.push("  " + oBindLine(binds[k]))
+  lines.push("end", "")
+
+  return lines.join("\n")
+}
+
+function oBindLine(bind) {
+  return "o.bind(" + luaString(bind.chord) + ", " +
+    luaString(bind.description) + ", " + luaString(bind.command) + ")"
+}
+
+// ---- Hyprland keyboard integration ----
+//
+// The service owns its shortcuts when no legacy static file exists: it sends
+// one expression to `hyprctl eval`, so a plain `omarchy plugin add` writes
+// nothing outside the plugin folder. Hyprland drops runtime binds and layer
+// rules on every config reload, so the service re-evaluates that expression
+// when it sees the `configreloaded` event. A `~/.config/hypr/switcher.lua`
+// written by an older installer takes precedence and keeps the static path.
+//
+// Binds are expressed as data so the two generators cannot drift apart.
+
+var BIND_PREFIX = "Switcher:"
+var IPC_PREFIX = "omarchy-shell -q apach.switcher "
+
+function ipcCommand(action) {
+  return IPC_PREFIX + action
+}
+
+function bindEntries(settings, dropdownEnabled) {
+  var source = settings || defaultSettings()
+  var all = allPresetForKey(source.allShortcut)
+  var preset = presetForKey(source.dropdownShortcut)
+  var list = [
+    {
+      chord: all.key,
+      description: BIND_PREFIX + " all windows",
+      command: ipcCommand("next"),
+      dropdown: false
+    },
+    {
+      chord: all.reverse,
+      description: BIND_PREFIX + " reverse windows",
+      command: ipcCommand("prev"),
+      dropdown: false
+    }
+  ]
+  if (dropdownEnabled) {
+    list.push({
+      chord: preset.key,
+      description: BIND_PREFIX + " Dropdown windows",
+      command: ipcCommand("nextDropdown"),
+      dropdown: true
+    })
+    list.push({
+      chord: preset.reverse,
+      description: BIND_PREFIX + " reverse Dropdown windows",
+      command: ipcCommand("prevDropdown"),
+      dropdown: true
+    })
+  }
+  return list
+}
+
+function pushUnique(list, value) {
+  if (list.indexOf(value) === -1) list.push(value)
+}
+
+// Every chord the plugin may own right now, plus the previously applied
+// presets when a shortcut just changed. All of them are unbound before a bind:
+// runtime registration has no config reload behind it, so a stale preset would
+// otherwise keep its key.
+function boundChords(settings, previous) {
+  var source = settings || defaultSettings()
+  var all = allPresetForKey(source.allShortcut)
+  var dropdown = presetForKey(source.dropdownShortcut)
+  var chords = []
+  pushUnique(chords, all.key)
+  pushUnique(chords, all.reverse)
+  pushUnique(chords, dropdown.key)
+  pushUnique(chords, dropdown.reverse)
+  if (previous) {
+    var previousAll = allPresetForKey(previous.allShortcut)
+    var previousDropdown = presetForKey(previous.dropdownShortcut)
+    pushUnique(chords, previousAll.key)
+    pushUnique(chords, previousAll.reverse)
+    pushUnique(chords, previousDropdown.key)
+    pushUnique(chords, previousDropdown.reverse)
+  }
+  return chords
+}
+
+// Chords that should end up bound, which is what a post-reload verification
+// checks. Unlike boundChords, this omits the Dropdown pair when Dropdown is
+// disabled.
+function activeChords(settings, dropdownEnabled) {
+  var binds = bindEntries(settings, dropdownEnabled)
+  var chords = []
+  for (var i = 0; i < binds.length; i++) pushUnique(chords, binds[i].chord)
+  return chords
+}
+
+var BIND_MODIFIERS = { ALT: 8, SHIFT: 1, CTRL: 4, SUPER: 64 }
+
+// Binds Omarchy ships on the chords the switcher takes over. Seeing them is
+// expected; anything else on those chords is reported as a conflict.
+var BENIGN_BINDS = [
+  "Focus on next window",
+  "Focus on previous window",
+  "Reveal active window on top"
+]
+
+function chordToBind(chord) {
+  var parts = String(chord || "").split("+")
+  var modmask = 0
+  var key = ""
+  for (var i = 0; i < parts.length; i++) {
+    var token = parts[i].trim().toUpperCase()
+    if (!token) continue
+    if (BIND_MODIFIERS[token] !== undefined) modmask = modmask | BIND_MODIFIERS[token]
+    else key = token
+  }
+  return { modmask: modmask, key: key }
+}
+
+// Compare the live Hyprland bind table with the chords the service should own.
+// `hyprctl binds -j` reports modmask and key, not the chord string, so chords
+// are converted first. Descriptions only; no window or application data.
+function parseBinds(raw, chords) {
+  var binds = []
+  try {
+    binds = JSON.parse(String(raw || "[]"))
+  } catch (e) {
+    binds = []
+  }
+  if (!Array.isArray(binds)) binds = []
+
+  var missing = []
+  var conflicts = []
+  for (var i = 0; i < chords.length; i++) {
+    var chord = String(chords[i] || "")
+    var wanted = chordToBind(chord)
+    if (!wanted.key) continue
+    var ours = false
+    for (var j = 0; j < binds.length; j++) {
+      var bind = binds[j]
+      if (!bind || typeof bind !== "object") continue
+      if (Number(bind.modmask || 0) !== wanted.modmask) continue
+      if (String(bind.key || "").toUpperCase() !== wanted.key) continue
+      var description = String(bind.description || "")
+      if (description.indexOf(BIND_PREFIX) === 0) ours = true
+      else if (BENIGN_BINDS.indexOf(description) === -1)
+        conflicts.push({ chord: chord, description: description })
+    }
+    if (!ours) missing.push(chord)
+  }
+  return { missing: missing, conflicts: conflicts }
+}
+
+// Chord, description and command values are internal constants, but escape
+// them anyway: the expression is handed to a Lua parser, not a shell.
+function luaString(value) {
+  return '"' + String(value)
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, "\\n") + '"'
+}
+
+function hyprEvalForSettings(settings, dropdownEnabled, options) {
+  var opts = options || {}
+  var lines = []
+  if (opts.layerRule !== false) lines.push(layerRuleLine())
+
+  var chords = boundChords(settings, opts.previous)
+  for (var i = 0; i < chords.length; i++)
+    lines.push("hl.unbind(" + luaString(chords[i]) + ")")
+
+  var binds = bindEntries(settings, dropdownEnabled)
+  for (var j = 0; j < binds.length; j++) {
+    var bind = binds[j]
+    lines.push("hl.bind(" + luaString(bind.chord) + ", hl.dsp.exec_cmd(" +
+      luaString(bind.command) + "), { description = " + luaString(bind.description) + " })")
+  }
+
+  return lines.join("; ")
+}
+
+// Removes every chord the plugin may own, without registering anything. Used
+// when the service is destroyed, when the user switches to the static file,
+// and to keep a reload from leaving stale binds behind.
+function hyprUnbindEval(settings, previous) {
+  var chords = boundChords(settings, previous)
+  var lines = []
+  for (var i = 0; i < chords.length; i++)
+    lines.push("hl.unbind(" + luaString(chords[i]) + ")")
+  return lines.join("; ")
 }
 
 if (typeof module !== "undefined") {
   module.exports = {
     validAddress: validAddress,
     validAppId: validAppId,
-    safeScreenName: safeScreenName,
+    displayScreensFor: displayScreensFor,
     safeIconName: safeIconName,
     safeIconSource: safeIconSource,
     dropdownEnabledFromShellConfig: dropdownEnabledFromShellConfig,
     parseDropdownState: parseDropdownState,
     parseClients: parseClients,
+    groupEntries: groupEntries,
     initialIndex: initialIndex,
     shortcutPresets: shortcutPresets,
+    allShortcutPresets: allShortcutPresets,
+    allPresetForKey: allPresetForKey,
     defaultSettings: defaultSettings,
     presetForKey: presetForKey,
     parseSettings: parseSettings,
     serializeSettings: serializeSettings,
-    luaForSettings: luaForSettings
+    luaForSettings: luaForSettings,
+    boundChords: boundChords,
+    activeChords: activeChords,
+    parseBinds: parseBinds,
+    hyprEvalForSettings: hyprEvalForSettings,
+    hyprUnbindEval: hyprUnbindEval
   }
 }
