@@ -11,8 +11,23 @@ CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 HYPR_DIR="$CONFIG_HOME/hypr"
 BINDS="$HYPR_DIR/switcher.lua"
 HYPRLAND="$HYPR_DIR/hyprland.lua"
+SETTINGS="$CONFIG_HOME/omarchy/switcher.json"
 REQUIRE='require("hypr.switcher")'
 STAMP="$(date +%Y%m%d%H%M%S)"
+
+# Prefer a file generated from the user's current shortcuts; fall back to the
+# shipped template when Node or the settings file is unavailable.
+generate_binds() {
+  if command -v node >/dev/null 2>&1 && [[ -f $SETTINGS ]]; then
+    node -e '
+      const fs = require("fs");
+      const Model = require(process.argv[1]);
+      process.stdout.write(Model.luaForSettings(Model.parseSettings(fs.readFileSync(process.argv[2], "utf8"))));
+    ' "$REPO/Model.js" "$SETTINGS"
+  else
+    cat "$REPO/hypr/switcher.lua"
+  fi
+}
 
 usage() {
   cat <<USAGE
@@ -37,7 +52,7 @@ case "${1:-}" in
 on)
   require_hyprland
   mkdir -p "$HYPR_DIR"
-  cp "$REPO/hypr/switcher.lua" "$BINDS"
+  generate_binds >"$BINDS"
   echo "Wrote $BINDS"
 
   if [[ -f $HYPRLAND ]] && ! grep -qF "$REQUIRE" "$HYPRLAND"; then

@@ -78,8 +78,10 @@ Then reload:
 hyprctl reload
 ```
 
-When `~/.config/hypr/switcher.lua` exists, the service detects it and leaves
-the keyboard integration entirely to that file. From a checkout,
+When Node is available and `~/.config/omarchy/switcher.json` exists, the
+helper generates the file from your current shortcuts; otherwise it copies the
+shipped default. When `~/.config/hypr/switcher.lua` exists, the service detects
+it and leaves the keyboard integration entirely to that file. From a checkout,
 `scripts/static-binds.sh off` removes that file and its `require` line (with
 backups) and goes back to runtime bindings.
 

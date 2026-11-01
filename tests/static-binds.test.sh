@@ -11,6 +11,9 @@ mkdir -p "$TMP/bin" "$TMP/.config/hypr"
 printf '#!/bin/sh\nexit 0\n' >"$TMP/bin/hyprctl"
 chmod +x "$TMP/bin/hyprctl"
 printf -- '-- user config\n' >"$TMP/.config/hypr/hyprland.lua"
+mkdir -p "$TMP/.config/omarchy"
+printf '{"version":1,"allShortcut":"ALT + GRAVE","dropdownShortcut":"CTRL + SPACE"}\n' \
+  >"$TMP/.config/omarchy/switcher.json"
 
 run() {
   HOME="$TMP" XDG_CONFIG_HOME="$TMP/.config" PATH="$TMP/bin:$PATH" \
@@ -22,6 +25,10 @@ run on >/dev/null
 [[ -f $TMP/.config/hypr/switcher.lua ]]
 grep -qF 'require("hypr.switcher")' "$TMP/.config/hypr/hyprland.lua"
 grep -qF 'hl.layer_rule' "$TMP/.config/hypr/switcher.lua"
+if command -v node >/dev/null 2>&1; then
+  grep -qF 'o.bind("ALT + GRAVE"' "$TMP/.config/hypr/switcher.lua"
+  grep -qF 'o.bind("CTRL + SPACE"' "$TMP/.config/hypr/switcher.lua"
+fi
 [[ $(run status) == "static" ]]
 ls "$TMP/.config/hypr"/hyprland.lua.bak.* >/dev/null
 

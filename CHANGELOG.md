@@ -16,7 +16,8 @@
 - `diagnose` IPC method for local support reports, without window titles or app
   ids.
 - `scripts/static-binds.sh on|off|status` for the optional static bindings
-  file, with backups.
+  file, with backups. `on` generates the file from the current shortcut
+  settings when Node is available.
 - `PRIVACY.md` and a GDPR section in the README.
 
 ### Changed
