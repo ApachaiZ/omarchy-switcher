@@ -385,8 +385,29 @@ Item {
     if ((event.modifiers & modifier) === 0) root.commit()
   }
 
+  // Icon lookup walks desktop entries and the icon theme; the overlay is
+  // rebuilt on every open, so memoize by app id. Bounded to keep RAM flat in
+  // long sessions.
+  property var iconCache: ({})
+  property var iconCacheOrder: []
+
   function iconFor(entry) {
     if (!entry) return ""
+    var cacheKey = String(entry.appId || entry.cls || "")
+    if (cacheKey && root.iconCache[cacheKey] !== undefined)
+      return root.iconCache[cacheKey]
+
+    var found = resolveIcon(entry)
+    if (cacheKey) {
+      if (root.iconCacheOrder.length >= 128)
+        delete root.iconCache[root.iconCacheOrder.shift()]
+      root.iconCache[cacheKey] = found
+      root.iconCacheOrder.push(cacheKey)
+    }
+    return found
+  }
+
+  function resolveIcon(entry) {
     var candidates = [entry.appId, entry.cls]
     for (var i = 0; i < candidates.length; i++) {
       var name = Model.safeIconName(candidates[i])

@@ -75,7 +75,7 @@ test("rich text and screen capture are never requested", () => {
     const source = readFileSync(file, "utf8")
     assert.equal(/Text\.(AutoText|RichText|StyledText)/.test(source), false, file)
     assert.equal(/ScreencopyView|ScreenCopy/.test(source), false, file)
-    assert.equal(/console\.(log|info|debug)/.test(source), false, file)
+    assert.equal(/console\./.test(source), false, file)
     assert.equal(/"?(sh|bash)"?\s*,\s*"-c"/.test(source), false, file)
   }
 })
