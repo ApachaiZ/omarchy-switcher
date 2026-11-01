@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs"
 // Window titles, app names and Dropdown state are untrusted input. Keep the
 // same regression guard used by Dropdown/Quay: every Text is plain text, and
 // no screen capture or shell command may be introduced into the service.
-const files = ["Service.qml", "OverlayWindow.qml", "HyprBinds.qml", "SettingsPanel.qml", "Model.js"]
+const files = ["Service.qml", "OverlayWindow.qml", "InputSurface.qml", "HyprBinds.qml", "SettingsPanel.qml", "Model.js"]
 
 function blockEnd(source, openBrace) {
   let depth = 0

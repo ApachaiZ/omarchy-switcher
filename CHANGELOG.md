@@ -43,6 +43,9 @@
   rendered only on the selected screens, even when the focused monitor is not
   part of the selection. The focused monitor is a fallback only when none of
   the selected screens is connected.
+- Keyboard input stays captured on the focused monitor when the overlay is
+  mirrored only on another screen. A transparent input surface owns the keys,
+  so arrows and Tab no longer reach the window underneath.
 - Runtime registration no longer stays pending forever: `StdioCollector.text`
   is read as a property (it is not a method), so bind status, verification and
   the one-step retry actually run.

@@ -135,7 +135,9 @@ The display section lets you choose between:
   monitors; the overlay is mirrored only on those screens. With **Active
   screen only** off it is intentionally not shown on the focused monitor
   unless that monitor is part of the selection, so a secondary-screen mirror
-  stays a secondary-screen mirror.
+  stays a secondary-screen mirror. Keyboard control remains on the focused
+  monitor in that case: a transparent input surface takes the keys there, so
+  arrows and Tab never reach the window underneath.
 
 Toggle rows with `Enter`/`Space` or the mouse. The screen names come from
 Quickshell and are validated before being stored. `Ctrl+Tab` is only bound

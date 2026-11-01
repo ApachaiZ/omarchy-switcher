@@ -93,10 +93,11 @@ Item {
   // not connected.
   readonly property var displayScreens: Model.displayScreensFor(settings, screenNames, activeScreenName)
 
-  readonly property string focusScreenName: {
-    if (activeScreenName && displayScreens.indexOf(activeScreenName) !== -1) return activeScreenName
-    return displayScreens.length > 0 ? displayScreens[0] : activeScreenName
-  }
+  // When the overlay is mirrored only on other screens, the focused monitor
+  // still needs a surface to own the keyboard; otherwise arrows and Tab reach
+  // the window underneath. InputSurface provides that without drawing there.
+  readonly property bool needsInputSurface: root.open && root.mode !== "settings"
+    && root.activeScreenName !== "" && root.displayScreens.indexOf(root.activeScreenName) === -1
 
   readonly property var settingsItems: {
     var items = []
@@ -568,7 +569,18 @@ Item {
         required property string modelData
         service: root
         screenName: modelData
-        focused: modelData === root.focusScreenName
+        focused: modelData === root.activeScreenName
+      }
+    }
+  }
+
+  Variants {
+    model: root.needsInputSurface ? [root.activeScreenName] : []
+    delegate: Component {
+      InputSurface {
+        required property string modelData
+        service: root
+        screenName: modelData
       }
     }
   }
