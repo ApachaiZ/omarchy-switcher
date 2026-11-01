@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs"
 // Window titles, app names and Dropdown state are untrusted input. Keep the
 // same regression guard used by Dropdown/Quay: every Text is plain text, and
 // no screen capture or shell command may be introduced into the service.
-const files = ["Service.qml", "OverlayWindow.qml", "Model.js"]
+const files = ["Service.qml", "OverlayWindow.qml", "HyprBinds.qml", "Model.js"]
 
 function blockEnd(source, openBrace) {
   let depth = 0
@@ -59,7 +59,9 @@ function textBlocks(file) {
   return blocks
 }
 
-const blocks = textBlocks("Service.qml").concat(textBlocks("OverlayWindow.qml"))
+const blocks = textBlocks("Service.qml")
+  .concat(textBlocks("OverlayWindow.qml"))
+  .concat(textBlocks("HyprBinds.qml"))
 
 test("every QML Text element renders plain text", () => {
   const failures = blocks
@@ -78,11 +80,12 @@ test("rich text and screen capture are never requested", () => {
   }
 })
 
-test("the service owns its shortcuts at runtime with a static-file fallback", () => {
-  const source = readFileSync("Service.qml", "utf8")
+test("the bindings engine owns its shortcuts with a static-file fallback", () => {
+  const source = readFileSync("HyprBinds.qml", "utf8")
   assert.match(source, /"hyprctl", "eval"/)
   assert.match(source, /configreloaded/)
-  assert.match(source, /legacyBinds/)
+  assert.match(source, /legacy/)
+  assert.match(source, /hyprUnbindEval/)
 })
 
 test("no remote URL is embedded in the service", () => {

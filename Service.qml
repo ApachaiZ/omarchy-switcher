@@ -28,17 +28,7 @@ Item {
   readonly property string bindsPath: home + "/.config/hypr/switcher.lua"
   readonly property string dropdownStatePath: home + "/.local/state/omarchy/dropdown-state.json"
 
-  // Keyboard integration. The service registers its own Hyprland binds and
-  // layer rule with `hyprctl eval`, so `omarchy plugin add` needs no files
-  // outside the plugin folder. A static ~/.config/hypr/switcher.lua from an
-  // older install (or from `install.sh --static-binds`) takes precedence.
-  property bool legacyBinds: false
-  property bool bindsProbed: false
   property bool settingsLoaded: false
-  property bool bindsRegistered: false
-  // Dropdown preset currently bound, so a change can remove the old key
-  // without a Hyprland reload.
-  property string appliedPreset: ""
   readonly property color themeAccent: Commons.Color.accent
   readonly property color popupText: Commons.Color.popups.text
   readonly property color popupBackground: Commons.Color.popups.background
@@ -50,6 +40,8 @@ Item {
         Math.min(0.72, themeAccent.hslLightness + 0.06), 1.0)
     : themeAccent
   readonly property string modeLabel: mode === "dropdown" ? "DROPDOWN WINDOWS" : "WINDOWS"
+  readonly property var allPresets: Model.allShortcutPresets()
+  readonly property var allPreset: Model.allPresetForKey(settings.allShortcut)
   readonly property var presets: Model.shortcutPresets()
   readonly property var dropdownPreset: Model.presetForKey(settings.dropdownShortcut)
   readonly property bool dropdownUsesSuper: dropdownPreset.key.indexOf("SUPER") === 0
@@ -60,7 +52,7 @@ Item {
     var parts = []
     if (mode === "dropdown") parts.push(dropdownPreset.label)
     else {
-      parts.push("Alt+Tab")
+      parts.push(allPreset.label)
       if (dropdownEnabled) parts.push(dropdownPreset.label + " for Dropdown")
     }
     parts.push("Tab/Shift+Tab")
@@ -114,14 +106,22 @@ Item {
 
   readonly property var settingsItems: {
     var items = []
+    for (var a = 0; a < allPresets.length; a++)
+      items.push({ kind: "allPreset", preset: allPresets[a], label: allPresets[a].label, itemIndex: items.length })
     for (var p = 0; p < presets.length; p++)
-      items.push({ kind: "preset", preset: presets[p], label: presets[p].label })
-    items.push({ kind: "active", label: "Active screen only", selected: settings.followActive })
+      items.push({ kind: "preset", preset: presets[p], label: presets[p].label, itemIndex: items.length })
+    items.push({ kind: "active", label: "Active screen only", selected: settings.followActive, itemIndex: items.length })
     for (var i = 0; i < screenNames.length; i++)
       items.push({ kind: "screen", name: screenNames[i], label: screenNames[i],
-        selected: settings.screens.indexOf(screenNames[i]) !== -1 })
+        selected: settings.screens.indexOf(screenNames[i]) !== -1, itemIndex: items.length })
     return items
   }
+
+  readonly property var allItems: settingsItems.filter(function(item) { return item.kind === "allPreset" })
+  readonly property var dropdownItems: settingsItems.filter(function(item) { return item.kind === "preset" })
+  readonly property var displayItems: settingsItems.filter(function(item) {
+    return item.kind === "active" || item.kind === "screen"
+  })
 
   Component.onCompleted: {
     settingsFile.reload()
@@ -129,56 +129,11 @@ Item {
     shellConfigFile.reload()
   }
 
-  Component.onDestruction: {
-    // Disabling or reloading the plugin should not leave binds pointing at an
-    // IPC target that no longer exists. Hyprland drops them on the next
-    // config reload anyway, but the gap is user-visible.
-    if (!root.legacyBinds) root.unbindKeys()
-  }
-
-  // Hyprland rebuilds its runtime config on every reload: binds registered
-  // with `hyprctl eval` and the layer rule vanish, so put them back as soon
-  // as the user's config has been re-applied.
-  Connections {
-    target: Hyprland
-    function onRawEvent(event) {
-      if (!event || String(event.name) !== "configreloaded") return
-      root.syncBindings(true)
-    }
-  }
-
-  function syncBindings(withLayerRule) {
-    if (!root.settingsLoaded || !root.bindsProbed || root.legacyBinds) return
-    Quickshell.execDetached(["hyprctl", "eval",
-      Model.hyprEvalForSettings(root.settings, root.dropdownEnabled, {
-        layerRule: !!withLayerRule,
-        previousPreset: root.appliedPreset
-      })])
-    root.appliedPreset = root.settings.dropdownShortcut
-    root.bindsRegistered = true
-  }
-
-  function unbindKeys() {
-    if (!root.bindsProbed) return
-    Quickshell.execDetached(["hyprctl", "eval",
-      Model.hyprUnbindEval(root.settings, root.appliedPreset)])
-    root.bindsRegistered = false
-  }
-
-  onLegacyBindsChanged: {
-    // A checkout install created the static file while the service was
-    // running: reload Hyprland so that file becomes the authority. A reload
-    // clears the runtime binds too, so nothing is left to unbind. When the
-    // file is detected at startup there is nothing to do: Hyprland has
-    // already loaded it and the service never registered.
-    if (root.legacyBinds) {
-      if (root.bindsRegistered) {
-        root.bindsRegistered = false
-        hyprReload.running = true
-      }
-    } else {
-      root.syncBindings(true)
-    }
+  HyprBinds {
+    id: hyprBinds
+    settings: root.settings
+    dropdownEnabled: root.dropdownEnabled
+    settingsLoaded: root.settingsLoaded
   }
 
   FileView {
@@ -189,12 +144,10 @@ Item {
     onLoaded: {
       root.settings = Model.parseSettings(text())
       root.settingsLoaded = true
-      root.syncBindings(!root.bindsRegistered)
     }
     onLoadFailed: {
       root.settings = Model.defaultSettings()
       root.settingsLoaded = true
-      root.syncBindings(!root.bindsRegistered)
     }
     onFileChanged: reload()
   }
@@ -216,37 +169,19 @@ Item {
     printErrors: false
     onLoaded: {
       var enabled = Model.dropdownEnabledFromShellConfig(text())
-      var changed = enabled !== root.dropdownEnabled
       root.dropdownEnabled = enabled
       if (!enabled && root.open && root.mode === "dropdown") root.cancel()
-      if (changed) root.syncBindings(false)
     }
-    onLoadFailed: {
-      var changed = root.dropdownEnabled !== false
-      root.dropdownEnabled = false
-      if (changed) root.syncBindings(false)
-    }
+    onLoadFailed: root.dropdownEnabled = false
     onFileChanged: reload()
   }
 
+  // Writable only: HyprBinds owns detection and registration. This view keeps
+  // the optional static file in sync with the chosen shortcuts.
   FileView {
     id: bindsFile
     path: root.bindsPath
-    watchChanges: true
     printErrors: false
-    // The static file, when present, is loaded by Hyprland itself: keep it as
-    // the single source of truth and let the service stay out of the keys.
-    onLoaded: {
-      root.legacyBinds = true
-      root.bindsProbed = true
-      root.syncBindings(true)
-    }
-    onLoadFailed: {
-      root.legacyBinds = false
-      root.bindsProbed = true
-      root.syncBindings(true)
-    }
-    onFileChanged: reload()
   }
 
   Process {
@@ -482,40 +417,53 @@ Item {
     root.sawKeyEvent = false
     root.entries = []
     root.open = true
+    hyprBinds.refreshConflicts()
   }
 
   function applyShortcut(preset) {
-    root.settings = {
-      version: 1,
-      dropdownShortcut: preset.key,
+    root.applyShortcuts(root.settings.allShortcut, preset.key)
+  }
+
+  function applyAllShortcut(preset) {
+    root.applyShortcuts(preset.key, root.settings.dropdownShortcut)
+  }
+
+  function applyShortcuts(allShortcut, dropdownShortcut) {
+    // parseSettings normalizes both values and resolves a collision between
+    // the all-windows and Dropdown shortcuts.
+    root.settings = Model.parseSettings(JSON.stringify({
+      allShortcut: allShortcut,
+      dropdownShortcut: dropdownShortcut,
       followActive: root.settings.followActive,
       screens: root.settings.screens
-    }
+    }))
     settingsFile.setText(Model.serializeSettings(root.settings))
-    if (root.legacyBinds) {
+    if (hyprBinds.legacy) {
       // Static installs keep the generated file in sync, then reload Hyprland.
       bindsFile.setText(Model.luaForSettings(root.settings))
       reloadTimer.restart()
-    } else {
-      // Runtime binds apply immediately; no Hyprland reload is needed.
-      root.syncBindings(false)
     }
+    // Runtime binds re-register when the settings object changes.
     root.cancel()
   }
 
   function saveDisplaySettings(followActive, screens) {
-    root.settings = {
-      version: 1,
+    root.settings = Model.parseSettings(JSON.stringify({
+      allShortcut: root.settings.allShortcut,
       dropdownShortcut: root.settings.dropdownShortcut,
       followActive: followActive,
       screens: screens
-    }
+    }))
     settingsFile.setText(Model.serializeSettings(root.settings))
   }
 
   function activateSettingsItem(index) {
     var item = root.settingsItems[index]
     if (!item) return
+    if (item.kind === "allPreset") {
+      root.applyAllShortcut(item.preset)
+      return
+    }
     if (item.kind === "preset") {
       root.applyShortcut(item.preset)
       return
@@ -556,8 +504,20 @@ Item {
         mode: root.mode,
         count: root.entries.length,
         selected: root.selected,
-        preset: root.settings.dropdownShortcut
+        preset: root.settings.dropdownShortcut,
+        allShortcut: root.settings.allShortcut,
+        binds: hyprBinds.status
       })
+    }
+
+    // Local support payload: binding health, mode and counts only. No window
+    // title, app id, screen serial or settings file content.
+    function diagnose(): string {
+      var report = hyprBinds.diagnostics()
+      report.dropdown = root.dropdownEnabled
+      report.preset = root.settings.dropdownShortcut
+      report.allShortcut = root.settings.allShortcut
+      return JSON.stringify(report)
     }
   }
 
@@ -579,6 +539,61 @@ Item {
 
     PanelWindow {
       id: settingsWindow
+
+      // One row for every shortcut preset; keeps the two shortcut sections
+      // visually identical without duplicating the layout.
+      component ShortcutRow: Rectangle {
+        id: row
+
+        required property string label
+        required property bool current
+        required property bool highlighted
+        signal picked()
+
+        width: parent ? parent.width : 0
+        height: Style.space(38)
+        radius: Math.max(8, Style.cornerRadius - 8)
+        color: highlighted
+          ? Util.alpha(Commons.Color.accent, 0.16)
+          : Util.alpha(Commons.Color.popups.text, 0.04)
+        border.width: highlighted ? 1 : 0
+        border.color: Commons.Color.accent
+
+        Text {
+          textFormat: Text.PlainText
+          anchors.left: parent.left
+          anchors.leftMargin: 14
+          anchors.verticalCenter: parent.verticalCenter
+          text: row.label
+          color: row.highlighted
+            ? Commons.Color.accent
+            : Util.alpha(Commons.Color.popups.text, 0.75)
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body
+          font.bold: row.highlighted
+        }
+
+        Text {
+          textFormat: Text.PlainText
+          anchors.right: parent.right
+          anchors.rightMargin: 14
+          anchors.verticalCenter: parent.verticalCenter
+          visible: row.current
+          text: "CURRENT"
+          color: Commons.Color.accent
+          font.family: Style.font.family
+          font.pixelSize: Style.font.caption
+          font.bold: true
+          font.letterSpacing: 0.8
+        }
+
+        MouseArea {
+          anchors.fill: parent
+          acceptedButtons: Qt.LeftButton
+          onClicked: row.picked()
+        }
+      }
+
       screen: root.targetScreen
       visible: true
       color: "transparent"
@@ -673,10 +688,27 @@ Item {
             textFormat: Text.PlainText
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
-            text: "All windows: Alt + Tab"
-            color: Util.alpha(root.popupText, 0.6)
+            text: "ALL WINDOWS SHORTCUT"
+            color: Util.alpha(root.popupText, 0.45)
             font.family: Style.font.family
-            font.pixelSize: Style.font.bodySmall
+            font.pixelSize: Style.font.caption
+            font.bold: true
+            font.letterSpacing: 0.8
+          }
+
+          Repeater {
+            model: root.allItems
+
+            delegate: ShortcutRow {
+              required property var modelData
+              label: modelData.label
+              current: root.settings.allShortcut === modelData.preset.key
+              highlighted: root.selected === modelData.itemIndex
+              onPicked: {
+                root.selected = modelData.itemIndex
+                root.applyAllShortcut(modelData.preset)
+              }
+            }
           }
 
           Text {
@@ -704,50 +736,16 @@ Item {
           }
 
           Repeater {
-            model: root.presets
+            model: root.dropdownItems
 
-            Rectangle {
+            delegate: ShortcutRow {
               required property var modelData
-              required property int index
-              width: parent.width
-              height: Style.space(38)
-              radius: Math.max(8, Style.cornerRadius - 8)
-              color: root.selected === index
-                ? Util.alpha(root.accent, 0.16)
-                : Util.alpha(root.popupText, 0.04)
-              border.width: root.selected === index ? 1 : 0
-              border.color: root.accent
-
-              Text {
-                textFormat: Text.PlainText
-                anchors.left: parent.left
-                anchors.leftMargin: 14
-                anchors.verticalCenter: parent.verticalCenter
-                text: modelData.label
-                color: root.selected === index ? root.accent : Util.alpha(root.popupText, 0.75)
-                font.family: Style.font.family
-                font.pixelSize: 12
-                font.bold: root.selected === index
-              }
-
-              Text {
-                textFormat: Text.PlainText
-                anchors.right: parent.right
-                anchors.rightMargin: 14
-                anchors.verticalCenter: parent.verticalCenter
-                visible: root.settings.dropdownShortcut === modelData.key
-                text: "CURRENT"
-                color: root.accent
-                font.family: Style.font.family
-                font.pixelSize: Style.font.caption
-                font.bold: true
-                font.letterSpacing: 0.8
-              }
-
-              MouseArea {
-                anchors.fill: parent
-                acceptedButtons: Qt.LeftButton
-                onClicked: root.applyShortcut(modelData)
+              label: modelData.label
+              current: root.settings.dropdownShortcut === modelData.preset.key
+              highlighted: root.selected === modelData.itemIndex
+              onPicked: {
+                root.selected = modelData.itemIndex
+                root.applyShortcut(modelData.preset)
               }
             }
           }
@@ -771,12 +769,11 @@ Item {
           }
 
           Repeater {
-            model: root.settingsItems.slice(root.presets.length)
+            model: root.displayItems
 
             Rectangle {
               required property var modelData
-              required property int index
-              readonly property int itemIndex: root.presets.length + index
+              readonly property int itemIndex: modelData.itemIndex
               width: parent.width
               height: Style.space(38)
               radius: Math.max(8, Style.cornerRadius - 8)
@@ -821,6 +818,48 @@ Item {
                   root.activateSettingsItem(itemIndex)
                 }
               }
+            }
+          }
+
+          Text {
+            textFormat: Text.PlainText
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            text: "BINDINGS: " + (hyprBinds.mode === "static" ? "STATIC FILE" : "RUNTIME")
+              + (hyprBinds.status === "error" ? " — ERROR" : "")
+            color: Util.alpha(root.popupText, 0.45)
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+            font.bold: true
+            font.letterSpacing: 0.8
+          }
+
+          Text {
+            textFormat: Text.PlainText
+            visible: hyprBinds.status === "error"
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            text: hyprBinds.lastError
+            color: Util.alpha(root.popupText, 0.6)
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+            wrapMode: Text.WordWrap
+          }
+
+          Repeater {
+            model: hyprBinds.conflicts
+
+            Text {
+              required property var modelData
+              textFormat: Text.PlainText
+              width: parent.width
+              horizontalAlignment: Text.AlignHCenter
+              text: modelData.chord + " is also bound to \"" + modelData.description
+                + "\" — the switcher replaces it while enabled"
+              color: Util.alpha(root.popupText, 0.55)
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
+              wrapMode: Text.WordWrap
             }
           }
 
