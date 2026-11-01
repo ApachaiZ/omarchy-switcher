@@ -201,7 +201,11 @@ Item {
 
   Component.onDestruction: {
     if (legacy || !registered) return
-    Quickshell.execDetached(["hyprctl", "eval", Model.hyprUnbindEval(settings, applied)])
+    // The shell is stopping or the plugin is being disabled. Reloading the
+    // user's config removes the runtime binds and restores Omarchy's own
+    // shortcuts, so the desktop keeps working while omarchy-shell is down.
+    // `config-only` avoids a monitor reconfiguration.
+    Quickshell.execDetached(["hyprctl", "reload", "config-only"])
   }
 
   Process {

@@ -183,16 +183,10 @@ test("live bind parsing reports missing shortcuts and real conflicts", () => {
   assert.deepEqual(grave.missing, [])
 })
 
-test("runtime unbind removes every chord the plugin may own", () => {
-  const unbind = Model.hyprUnbindEval({ dropdownShortcut: "CTRL + SPACE" })
-  assert.equal(unbind.includes("\n"), false)
-  assert.doesNotMatch(unbind, /hl\.bind/)
-  for (const chord of ["ALT + TAB", "ALT + SHIFT + TAB", "CTRL + SPACE", "CTRL + SHIFT + SPACE"])
-    assert.match(unbind, new RegExp(`hl\\.unbind\\("${chord.replace(/[+]/g, "\\+")}"\\)`))
-  // The global settings chord is gone on purpose: Omarchy uses it for the
-  // scratchpad, and settings are reachable with Alt+S inside the overlay.
-  assert.doesNotMatch(unbind, /SUPER \+ ALT \+ S/)
-  assert.equal(Model.boundChords({ dropdownShortcut: "CTRL + SPACE" }).length, 4)
+test("boundChords covers the active presets without the global settings chord", () => {
+  const chords = Model.boundChords({ dropdownShortcut: "CTRL + SPACE" })
+  assert.deepEqual(chords, ["ALT + TAB", "ALT + SHIFT + TAB", "CTRL + SPACE", "CTRL + SHIFT + SPACE"])
+  assert.equal(chords.includes("SUPER + ALT + S"), false)
 })
 
 test("icon names and sources are restricted to local values", () => {

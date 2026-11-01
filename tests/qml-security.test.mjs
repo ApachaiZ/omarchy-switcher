@@ -86,7 +86,7 @@ test("the bindings engine owns its shortcuts with a static-file fallback", () =>
   assert.match(source, /"hyprctl", "eval"/)
   assert.match(source, /configreloaded/)
   assert.match(source, /legacy/)
-  assert.match(source, /hyprUnbindEval/)
+  assert.match(source, /config-only/)
 })
 
 test("stdio collectors use the Quickshell text property, not a call", () => {

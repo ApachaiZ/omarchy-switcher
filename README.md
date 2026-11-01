@@ -105,12 +105,16 @@ read for compatibility until you remove it.
   reported in the settings panel and in `diagnose`.
 - Changes are coalesced and deduplicated: one `hyprctl eval` at a time, and no
   process is spawned when the bind-relevant settings did not change.
-- If `omarchy-shell` is not running, the runtime binds do nothing until the
-  next reload. A 0.1.x static file, if still present, keeps the binds, but
-  their IPC calls still need the service.
-- Disabling the plugin unbinds its keys when the service is destroyed, so no
-  dead shortcut is left behind. Hyprland's own defaults come back on the next
-  reload (`hyprctl reload` or `omarchy restart shell`).
+- When `omarchy-shell` stops or restarts, the service reloads Hyprland's
+  config (`hyprctl reload config-only`). That removes the runtime binds and
+  restores Omarchy's own shortcuts, so the desktop keeps working while the
+  shell is down; the next shell start registers the switcher again. A 0.1.x
+  static file, if still present, keeps its binds, but their IPC calls still
+  need the service.
+- If the shell is killed abruptly, its destruction handler cannot run: the
+  binds stay but their IPC calls fail until the next config reload.
+- Disabling the plugin runs the same config reload, so no dead shortcut is
+  left behind.
 - Conflicts are reported, not resolved silently: if another tool (for example
   `vbrosseau.alttab`) owns one of the chords, the settings panel names it.
 

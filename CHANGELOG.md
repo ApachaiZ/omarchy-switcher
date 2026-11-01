@@ -53,6 +53,9 @@
 - Navigation keys no longer validate the current card on release. Only the
   modifier key, Enter/Space, a click or the quick-tap timer commits; Down and
   Tab now navigate without closing the switcher.
+- Stopping, restarting or disabling the shell reloads Hyprland's config
+  (`config-only`), restoring Omarchy's default shortcuts instead of leaving the
+  switcher's runtime binds behind.
 - Runtime registration no longer stays pending forever: `StdioCollector.text`
   is read as a property (it is not a method), so bind status, verification and
   the one-step retry actually run.

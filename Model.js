@@ -533,17 +533,6 @@ function hyprEvalForSettings(settings, dropdownEnabled, options) {
   return lines.join("; ")
 }
 
-// Removes every chord the plugin may own, without registering anything. Used
-// when the service is destroyed, when the user switches to the static file,
-// and to keep a reload from leaving stale binds behind.
-function hyprUnbindEval(settings, previous) {
-  var chords = boundChords(settings, previous)
-  var lines = []
-  for (var i = 0; i < chords.length; i++)
-    lines.push("hl.unbind(" + luaString(chords[i]) + ")")
-  return lines.join("; ")
-}
-
 if (typeof module !== "undefined") {
   module.exports = {
     validAddress: validAddress,
@@ -568,6 +557,5 @@ if (typeof module !== "undefined") {
     activeChords: activeChords,
     parseBinds: parseBinds,
     hyprEvalForSettings: hyprEvalForSettings,
-    hyprUnbindEval: hyprUnbindEval
   }
 }
