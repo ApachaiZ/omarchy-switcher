@@ -19,4 +19,3 @@ if switcherHasDropdown() then
   o.bind("CTRL + TAB", "Switcher: Dropdown windows", "omarchy-shell -q apach.switcher nextDropdown")
   o.bind("CTRL + SHIFT + TAB", "Switcher: reverse Dropdown windows", "omarchy-shell -q apach.switcher prevDropdown")
 end
-o.bind("SUPER + ALT + S", "Switcher: settings", "omarchy-shell -q apach.switcher settings")

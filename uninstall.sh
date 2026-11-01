@@ -16,6 +16,10 @@ fi
 rm -f "$HYPR_DIR/switcher.lua"
 rm -rf "$DEST"
 
+# The destroyed service removes its runtime binds with `hyprctl eval`. Give
+# that process a moment to land before the reload restores Omarchy's defaults,
+# otherwise it could unbind them again right after.
+sleep 0.3
 hyprctl reload >/dev/null 2>&1 || true
 
 cat <<EOF

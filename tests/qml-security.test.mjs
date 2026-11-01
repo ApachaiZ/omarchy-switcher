@@ -78,6 +78,13 @@ test("rich text and screen capture are never requested", () => {
   }
 })
 
+test("the service owns its shortcuts at runtime with a static-file fallback", () => {
+  const source = readFileSync("Service.qml", "utf8")
+  assert.match(source, /"hyprctl", "eval"/)
+  assert.match(source, /configreloaded/)
+  assert.match(source, /legacyBinds/)
+})
+
 test("no remote URL is embedded in the service", () => {
   for (const file of files) {
     assert.equal(/https?:\/\//.test(readFileSync(file, "utf8")), false, file)

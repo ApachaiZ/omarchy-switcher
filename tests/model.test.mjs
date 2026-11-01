@@ -69,7 +69,47 @@ test("generated Lua contains the selected Dropdown shortcut and layer rule", () 
   assert.match(lua, /o\.bind\("SUPER \+ TAB"/)
   assert.match(lua, /o\.bind\("SUPER \+ SHIFT \+ TAB"/)
   assert.match(lua, /ALT \+ TAB/)
-  assert.match(lua, /apach\.switcher settings/)
+  // Settings open from inside the overlay (Alt+S / Ctrl+S), not from a
+  // global chord that would shadow Omarchy's scratchpad bind.
+  assert.doesNotMatch(lua, /Switcher: settings/)
+  assert.doesNotMatch(lua, /SUPER \+ ALT \+ S/)
+})
+
+test("runtime eval unbinds before binding and only binds Dropdown when enabled", () => {
+  const noDropdown = Model.hyprEvalForSettings({ dropdownShortcut: "SUPER + TAB" }, false, { layerRule: false })
+  assert.equal(noDropdown.includes("\n"), false)
+  assert.doesNotMatch(noDropdown, /layer_rule/)
+  assert.match(noDropdown, /hl\.unbind\("ALT \+ TAB"\)/)
+  assert.match(noDropdown, /hl\.unbind\("SUPER \+ TAB"\)/)
+  assert.match(noDropdown, /hl\.bind\("ALT \+ TAB", hl\.dsp\.exec_cmd\("omarchy-shell -q apach\.switcher next"\), \{ description = "Switcher: all windows" \}\)/)
+  assert.doesNotMatch(noDropdown, /hl\.bind\("SUPER \+ TAB"/)
+  assert.doesNotMatch(noDropdown, /nextDropdown|prevDropdown/)
+  assert.ok(noDropdown.indexOf("hl.unbind") < noDropdown.indexOf("hl.bind"))
+
+  const withDropdown = Model.hyprEvalForSettings({ dropdownShortcut: "SUPER + TAB" }, true)
+  assert.match(withDropdown, /hl\.layer_rule/)
+  assert.match(withDropdown, /hl\.bind\("SUPER \+ TAB".*nextDropdown/)
+  assert.match(withDropdown, /hl\.bind\("SUPER \+ SHIFT \+ TAB".*prevDropdown/)
+  assert.doesNotMatch(withDropdown, /Switcher: settings/)
+
+  // Changing the preset leaves no stale runtime bind behind.
+  const switched = Model.hyprEvalForSettings({ dropdownShortcut: "SUPER + TAB" }, true,
+    { layerRule: false, previousPreset: "CTRL + TAB" })
+  assert.match(switched, /hl\.unbind\("CTRL \+ TAB"\)/)
+  assert.match(switched, /hl\.unbind\("CTRL \+ SHIFT \+ TAB"\)/)
+  assert.equal(Model.boundChords({ dropdownShortcut: "SUPER + TAB" }, "CTRL + TAB").length, 6)
+})
+
+test("runtime unbind removes every chord the plugin may own", () => {
+  const unbind = Model.hyprUnbindEval({ dropdownShortcut: "CTRL + SPACE" })
+  assert.equal(unbind.includes("\n"), false)
+  assert.doesNotMatch(unbind, /hl\.bind/)
+  for (const chord of ["ALT + TAB", "ALT + SHIFT + TAB", "CTRL + SPACE", "CTRL + SHIFT + SPACE"])
+    assert.match(unbind, new RegExp(`hl\\.unbind\\("${chord.replace(/[+]/g, "\\+")}"\\)`))
+  // The global settings chord is gone on purpose: Omarchy uses it for the
+  // scratchpad, and settings are reachable with Alt+S inside the overlay.
+  assert.doesNotMatch(unbind, /SUPER \+ ALT \+ S/)
+  assert.equal(Model.boundChords({ dropdownShortcut: "CTRL + SPACE" }).length, 4)
 })
 
 test("icon names and sources are restricted to local values", () => {

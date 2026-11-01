@@ -12,8 +12,9 @@ work directly with [Dropdown](https://github.com/ApachaiZ/omarchy-dropdown).
 - The selected card zooms and takes the mode's accent colour.
 - **Alt-Tab** mode uses cyan; **Dropdown** mode uses violet, so the two
   contexts are immediately distinguishable.
-- **Settings**: `Super + Alt + S` when closed, or `Alt+S` / `Ctrl+S` inside the
-  overlay (the modifier follows the mode).
+- **Settings**: `Alt+S` / `Ctrl+S` inside the overlay (the modifier follows the
+  mode), or the ⚙ button. There is no global settings shortcut, so the
+  switcher never takes a key from the rest of the desktop.
 - No screen capture. Icons are local; titles are rendered as plain text.
 
 
@@ -31,7 +32,26 @@ work directly with [Dropdown](https://github.com/ApachaiZ/omarchy-dropdown).
 omarchy plugin add https://github.com/ApachaiZ/omarchy-switcher --enable --yes
 ```
 
-The plugin directory contains the Hyprland integration file. Install it once:
+That is the whole install. The service registers its Hyprland shortcuts and
+layer rule itself when the shell loads it, and re-registers them after every
+Hyprland config reload. The plugin needs no files outside
+`~/.config/omarchy/plugins/apach.switcher/`; the settings panel only stores
+your choices in `~/.config/omarchy/switcher.json`.
+
+The default bindings are:
+
+| Shortcut | Action |
+| --- | --- |
+| `Alt + Tab` | cycle other windows |
+| `Alt + Shift + Tab` | cycle other windows backwards |
+| `Ctrl + Tab` | cycle Dropdown windows |
+| `Ctrl + Shift + Tab` | cycle Dropdown windows backwards |
+
+### Static bindings (optional)
+
+If you want the shortcuts to live in Hyprland's config — for example so they
+survive a stopped `omarchy-shell` — install the plugin once, then generate the
+static file:
 
 ```bash
 install -Dm644 \
@@ -39,8 +59,8 @@ install -Dm644 \
   ~/.config/hypr/switcher.lua
 ```
 
-Add this line to `~/.config/hypr/hyprland.lua` (or run `./install.sh` from a
-checkout, which does both steps):
+Add this line to `~/.config/hypr/hyprland.lua` (from a checkout,
+`./install.sh --static-binds` does both steps):
 
 ```lua
 require("hypr.switcher")
@@ -52,15 +72,23 @@ Then reload:
 hyprctl reload
 ```
 
-The default bindings are:
+When `~/.config/hypr/switcher.lua` exists, the service detects it and leaves
+the keyboard integration entirely to that file. From a checkout,
+`./install.sh --runtime-binds` removes that file and its `require` line (with
+backups) and goes back to runtime bindings.
 
-| Shortcut | Action |
-| --- | --- |
-| `Alt + Tab` | cycle other windows |
-| `Alt + Shift + Tab` | cycle other windows backwards |
-| `Ctrl + Tab` | cycle Dropdown windows |
-| `Ctrl + Shift + Tab` | cycle Dropdown windows backwards |
-| `Super + Alt + S` | open Switcher settings |
+### How runtime bindings behave
+
+- Hyprland drops binds and layer rules registered with `hyprctl eval` on every
+  config reload. The service re-applies them on Hyprland's `configreloaded`
+  event, so for a few milliseconds after a reload `Alt+Tab` belongs to
+  Omarchy's default binds again.
+- If `omarchy-shell` is not running, the runtime binds do nothing until the
+  next reload. The static file above keeps the binds, but their IPC calls still
+  need the service.
+- Disabling the plugin unbinds its keys when the service is destroyed, so no
+  dead shortcut is left behind. Hyprland's own defaults come back on the next
+  reload (`hyprctl reload` or `omarchy restart shell`).
 
 ## Use
 
@@ -80,8 +108,9 @@ service checks the live modifier state and commits the initial selection.
 ## Settings and screens
 
 Open the settings with the **⚙** button in the overlay, with **Alt+S** in the
-all-windows mode, with **Ctrl+S** in Dropdown mode (or **Super+S** if you chose
-the Super+Tab preset), or with **Super + Alt + S** when the switcher is closed.
+all-windows mode, or with **Ctrl+S** in Dropdown mode (or **Super+S** if you
+chose the Super+Tab preset). With the switcher closed there is no global
+settings shortcut: open the overlay first.
 
 The display section lets you choose between:
 
@@ -104,9 +133,11 @@ mouse:
 - `Super + Tab`
 - `Ctrl + Space`
 
-The choice is written to `~/.config/omarchy/switcher.json` and the generated
-`~/.config/hypr/switcher.lua`, then Hyprland is reloaded. The all-windows
-shortcut stays `Alt+Tab` so it cannot collide with the Dropdown shortcut.
+The choice is written to `~/.config/omarchy/switcher.json` and applied
+immediately: runtime bindings are re-registered in place, with no Hyprland
+reload. Static installs also regenerate `~/.config/hypr/switcher.lua` and
+reload Hyprland. The all-windows shortcut stays `Alt+Tab` so it cannot collide
+with the Dropdown shortcut.
 
 ## Dropdown integration
 
@@ -164,8 +195,8 @@ enabling Switcher.
 
 ## Backdrop blur
 
-The overlay uses a translucent dark panel and the layer rule in
-`hypr/switcher.lua`:
+The overlay uses a translucent dark panel and this layer rule, registered by
+the service at runtime (or read from `hypr/switcher.lua` in static mode):
 
 ```lua
 hl.layer_rule({ match = { namespace = "apach-switcher" }, blur = true, ignore_alpha = 0.15, no_anim = true })
@@ -181,6 +212,8 @@ settings if you want the full glass effect.
 ```bash
 node --test tests/*.test.mjs
 omarchy plugin validate .
+./install.sh              # local checkout, runtime bindings
+./install.sh --static-binds  # local checkout, generated hypr/switcher.lua
 ```
 
 ## License

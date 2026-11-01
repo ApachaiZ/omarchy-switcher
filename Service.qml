@@ -20,8 +20,6 @@ Item {
   property string pendingMode: "all"
   property bool pendingReverse: false
   property bool sawKeyEvent: false
-  property bool modsHeld: false
-  property var heldKeys: ({})
   property var pendingEntry: null
   property bool dropdownEnabled: false
 
@@ -29,10 +27,21 @@ Item {
   readonly property string settingsPath: home + "/.config/omarchy/switcher.json"
   readonly property string bindsPath: home + "/.config/hypr/switcher.lua"
   readonly property string dropdownStatePath: home + "/.local/state/omarchy/dropdown-state.json"
+
+  // Keyboard integration. The service registers its own Hyprland binds and
+  // layer rule with `hyprctl eval`, so `omarchy plugin add` needs no files
+  // outside the plugin folder. A static ~/.config/hypr/switcher.lua from an
+  // older install (or from `install.sh --static-binds`) takes precedence.
+  property bool legacyBinds: false
+  property bool bindsProbed: false
+  property bool settingsLoaded: false
+  property bool bindsRegistered: false
+  // Dropdown preset currently bound, so a change can remove the old key
+  // without a Hyprland reload.
+  property string appliedPreset: ""
   readonly property color themeAccent: Commons.Color.accent
   readonly property color popupText: Commons.Color.popups.text
   readonly property color popupBackground: Commons.Color.popups.background
-  readonly property color popupBorder: Commons.Color.popups.border
   // Keep the Dropdown mode clearly distinct without leaving the active theme:
   // rotate the theme accent's hue toward violet and reuse its saturation.
   readonly property color accent: mode === "dropdown"
@@ -120,13 +129,73 @@ Item {
     shellConfigFile.reload()
   }
 
+  Component.onDestruction: {
+    // Disabling or reloading the plugin should not leave binds pointing at an
+    // IPC target that no longer exists. Hyprland drops them on the next
+    // config reload anyway, but the gap is user-visible.
+    if (!root.legacyBinds) root.unbindKeys()
+  }
+
+  // Hyprland rebuilds its runtime config on every reload: binds registered
+  // with `hyprctl eval` and the layer rule vanish, so put them back as soon
+  // as the user's config has been re-applied.
+  Connections {
+    target: Hyprland
+    function onRawEvent(event) {
+      if (!event || String(event.name) !== "configreloaded") return
+      root.syncBindings(true)
+    }
+  }
+
+  function syncBindings(withLayerRule) {
+    if (!root.settingsLoaded || !root.bindsProbed || root.legacyBinds) return
+    Quickshell.execDetached(["hyprctl", "eval",
+      Model.hyprEvalForSettings(root.settings, root.dropdownEnabled, {
+        layerRule: !!withLayerRule,
+        previousPreset: root.appliedPreset
+      })])
+    root.appliedPreset = root.settings.dropdownShortcut
+    root.bindsRegistered = true
+  }
+
+  function unbindKeys() {
+    if (!root.bindsProbed) return
+    Quickshell.execDetached(["hyprctl", "eval",
+      Model.hyprUnbindEval(root.settings, root.appliedPreset)])
+    root.bindsRegistered = false
+  }
+
+  onLegacyBindsChanged: {
+    // A checkout install created the static file while the service was
+    // running: reload Hyprland so that file becomes the authority. A reload
+    // clears the runtime binds too, so nothing is left to unbind. When the
+    // file is detected at startup there is nothing to do: Hyprland has
+    // already loaded it and the service never registered.
+    if (root.legacyBinds) {
+      if (root.bindsRegistered) {
+        root.bindsRegistered = false
+        hyprReload.running = true
+      }
+    } else {
+      root.syncBindings(true)
+    }
+  }
+
   FileView {
     id: settingsFile
     path: root.settingsPath
     watchChanges: true
     printErrors: false
-    onLoaded: root.settings = Model.parseSettings(text())
-    onLoadFailed: root.settings = Model.defaultSettings()
+    onLoaded: {
+      root.settings = Model.parseSettings(text())
+      root.settingsLoaded = true
+      root.syncBindings(!root.bindsRegistered)
+    }
+    onLoadFailed: {
+      root.settings = Model.defaultSettings()
+      root.settingsLoaded = true
+      root.syncBindings(!root.bindsRegistered)
+    }
     onFileChanged: reload()
   }
 
@@ -146,17 +215,38 @@ Item {
     watchChanges: true
     printErrors: false
     onLoaded: {
-      root.dropdownEnabled = Model.dropdownEnabledFromShellConfig(text())
-      if (!root.dropdownEnabled && root.open && root.mode === "dropdown") root.cancel()
+      var enabled = Model.dropdownEnabledFromShellConfig(text())
+      var changed = enabled !== root.dropdownEnabled
+      root.dropdownEnabled = enabled
+      if (!enabled && root.open && root.mode === "dropdown") root.cancel()
+      if (changed) root.syncBindings(false)
     }
-    onLoadFailed: root.dropdownEnabled = false
+    onLoadFailed: {
+      var changed = root.dropdownEnabled !== false
+      root.dropdownEnabled = false
+      if (changed) root.syncBindings(false)
+    }
     onFileChanged: reload()
   }
 
   FileView {
     id: bindsFile
     path: root.bindsPath
+    watchChanges: true
     printErrors: false
+    // The static file, when present, is loaded by Hyprland itself: keep it as
+    // the single source of truth and let the service stay out of the keys.
+    onLoaded: {
+      root.legacyBinds = true
+      root.bindsProbed = true
+      root.syncBindings(true)
+    }
+    onLoadFailed: {
+      root.legacyBinds = false
+      root.bindsProbed = true
+      root.syncBindings(true)
+    }
+    onFileChanged: reload()
   }
 
   Process {
@@ -228,8 +318,6 @@ Item {
     root.selected = Model.initialIndex(list.length, root.pendingReverse)
     root.pendingReverse = false
     root.sawKeyEvent = false
-    root.modsHeld = false
-    root.heldKeys = ({})
     root.open = true
     modTimer.restart()
   }
@@ -303,7 +391,6 @@ Item {
 
   function handlePressed(event) {
     root.sawKeyEvent = true
-    root.modsHeld = (event.modifiers & (Qt.AltModifier | Qt.ControlModifier | Qt.MetaModifier)) !== 0
     if (event.key === Qt.Key_Escape) {
       root.cancel()
       event.accepted = true
@@ -405,9 +492,15 @@ Item {
       screens: root.settings.screens
     }
     settingsFile.setText(Model.serializeSettings(root.settings))
-    bindsFile.setText(Model.luaForSettings(root.settings))
+    if (root.legacyBinds) {
+      // Static installs keep the generated file in sync, then reload Hyprland.
+      bindsFile.setText(Model.luaForSettings(root.settings))
+      reloadTimer.restart()
+    } else {
+      // Runtime binds apply immediately; no Hyprland reload is needed.
+      root.syncBindings(false)
+    }
     root.cancel()
-    reloadTimer.restart()
   }
 
   function saveDisplaySettings(followActive, screens) {
