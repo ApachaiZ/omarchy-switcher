@@ -50,6 +50,19 @@ Hyprland config reload. The plugin needs no files outside
 `~/.config/omarchy/plugins/apach.switcher/`; the settings panel only stores
 your choices in `~/.config/omarchy/switcher.json`.
 
+### Requirements
+
+- Omarchy 4 (the Quickshell shell) with Hyprland's Lua config: runtime bindings
+  use `hyprctl eval`.
+- Dropdown is optional; only the Dropdown mode needs it.
+- No Node, build step or extra package is needed for a normal install. Node is
+  only used by the optional `scripts/static-binds.sh` generator.
+
+If you are migrating from 0.1.x, remove the old
+`~/.config/hypr/switcher.lua` and its `require` line
+(`scripts/static-binds.sh off`) so the service owns the shortcuts; otherwise
+the plugin keeps using the static file.
+
 The default bindings are:
 
 | Shortcut | Action |
