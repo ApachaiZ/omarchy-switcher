@@ -59,8 +59,8 @@ install -Dm644 \
   ~/.config/hypr/switcher.lua
 ```
 
-Add this line to `~/.config/hypr/hyprland.lua` (from a checkout,
-`./install.sh --static-binds` does both steps):
+Add this line to `~/.config/hypr/hyprland.lua` (`scripts/static-binds.sh on`
+does both steps from a checkout):
 
 ```lua
 require("hypr.switcher")
@@ -74,7 +74,7 @@ hyprctl reload
 
 When `~/.config/hypr/switcher.lua` exists, the service detects it and leaves
 the keyboard integration entirely to that file. From a checkout,
-`./install.sh --runtime-binds` removes that file and its `require` line (with
+`scripts/static-binds.sh off` removes that file and its `require` line (with
 backups) and goes back to runtime bindings.
 
 ### How runtime bindings behave
@@ -212,8 +212,11 @@ settings if you want the full glass effect.
 ```bash
 node --test tests/*.test.mjs
 omarchy plugin validate .
-./install.sh              # local checkout, runtime bindings
-./install.sh --static-binds  # local checkout, generated hypr/switcher.lua
+
+# Optional static bindings, from a checkout
+scripts/static-binds.sh on
+scripts/static-binds.sh off
+scripts/static-binds.sh status
 ```
 
 ## License
