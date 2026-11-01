@@ -5,9 +5,9 @@ work directly with [Dropdown](https://github.com/ApachaiZ/omarchy-dropdown).
 
 ![Omarchy Switcher — Your windows. One shortcut.](preview.png)
 
-- **Alt + Tab** (configurable) cycles mapped Hyprland windows that Dropdown
-  does **not** manage.
-- **Ctrl + Tab** cycles only windows managed by Dropdown.
+- **Alt + Tab** (configurable) cycles mapped applications that Dropdown does
+  **not** manage, one card per app.
+- **Ctrl + Tab** cycles only applications managed by Dropdown.
 - Binds are registered at runtime; no files outside the plugin folder.
 - A central overlay with a translucent, blurred backdrop.
 - One icon card per **application**, with a centered stylized title above it.
@@ -32,6 +32,10 @@ work directly with [Dropdown](https://github.com/ApachaiZ/omarchy-dropdown).
 | ![Windows](docs/screenshots/switcher-all.png) | ![Dropdown windows](docs/screenshots/switcher-dropdown.png) |
 
 ![Settings](docs/screenshots/switcher-settings.png)
+
+> The screenshots predate 0.3: cards are now grouped by application, show the
+> monitor/workspace badge and can expand a window list. They will be
+> regenerated before the release.
 
 ## Install
 
@@ -58,6 +62,25 @@ The all-windows shortcut can also be set to Alt + backtick (reverse
 Alt + Shift + backtick) in Settings. `Super + Tab` is deliberately not offered:
 Omarchy uses it for workspace switching.
 
+### Omarchy plugin contract
+
+This repository is a standard Omarchy shell plugin:
+
+- `manifest.json` uses `schemaVersion: 1`, `kinds: ["service"]`,
+  `keepLoaded: true` and `entryPoints.service = "Service.qml"`;
+- `omarchy plugin validate .` passes, the id is outside the reserved
+  `omarchy.*` namespace, and the folder contains no symlinks;
+- there is **no install hook**. `omarchy plugin add` only clones, validates and
+  enables; the `scripts/` helpers are developer tools that Omarchy never runs;
+- the plugin needs no sudo, no package installation and no network access;
+- all installed files stay inside
+  `~/.config/omarchy/plugins/apach.switcher/`.
+
+Like every Omarchy plugin, it runs as unsandboxed code inside `omarchy-shell`.
+Only install it if you trust the repository. The plugin writes only its own
+settings file (`~/.config/omarchy/switcher.json`) and, if you opt into static
+bindings, `~/.config/hypr/switcher.lua`.
+
 ### Static bindings (optional)
 
 If you want the shortcuts to live in Hyprland's config — for example so they
@@ -70,8 +93,9 @@ install -Dm644 \
   ~/.config/hypr/switcher.lua
 ```
 
-Add this line to `~/.config/hypr/hyprland.lua` (`scripts/static-binds.sh on`
-does both steps from a checkout):
+Add this line to `~/.config/hypr/hyprland.lua` (from a checkout,
+`scripts/static-binds.sh on` does both steps; when installed, run
+`~/.config/omarchy/plugins/apach.switcher/scripts/static-binds.sh on`):
 
 ```lua
 require("hypr.switcher")
@@ -110,6 +134,22 @@ backups) and goes back to runtime bindings.
 - Conflicts are reported, not resolved silently: if another tool (for example
   `vbrosseau.alttab`) owns one of the chords, the settings panel names it.
 
+### Updating and removing
+
+```bash
+omarchy plugin update apach.switcher --yes
+omarchy restart shell   # keepLoaded services keep their old code until a restart
+```
+
+The service is declared `keepLoaded: true`, so file updates alone do not
+replace the running instance. Before removing the plugin, drop the optional
+static bindings if you used them:
+
+```bash
+~/.config/omarchy/plugins/apach.switcher/scripts/static-binds.sh off
+omarchy plugin remove apach.switcher --yes
+```
+
 ## Use
 
 While the overlay is open:
@@ -147,10 +187,10 @@ The display section lets you choose between:
   monitor in that case: a transparent input surface takes the keys there, so
   arrows and Tab never reach the window underneath.
 
-Toggle rows with `Enter`/`Space` or the mouse. The screen names come from
-Quickshell and are validated before being stored. `Ctrl+Tab` is only bound
-when the **Dropdown plugin is enabled**; if Dropdown is absent or disabled,
-the shortcut is left to the rest of the desktop and the hint omits it.
+Toggle rows with `Enter` or the mouse. The screen names come from Quickshell
+and are validated before being stored. `Ctrl+Tab` is only bound when the
+**Dropdown plugin is enabled**; if Dropdown is absent or disabled, the
+shortcut is left to the rest of the desktop and the hint omits it.
 
 Choose the all-windows shortcut and the Dropdown shortcut from the keyboard
 (`↑`/`↓`, `Enter`) or with the mouse:
@@ -203,8 +243,8 @@ enabling Switcher.
 - Dropdown app ids are validated before being passed as a separate argv
   element; no shell command is built from window data.
 - The state file is read locally and is never uploaded or logged.
-- The IPC `status` method exposes counts and the selected index, never window
-  titles or app ids.
+- The IPC `status` method exposes counts, the selected index and submenu
+  state, never window titles, app ids, monitor names or workspace names.
 - The IPC `diagnose` method returns binding health, mode and shortcut names
   only. It never includes window titles, app ids, screen serials or the
   contents of the settings file.
@@ -228,6 +268,10 @@ that file removes everything the plugin wrote; the static file and its
 
 - The client list is read with **one `hyprctl clients -j` process per open**.
   There is no polling while the switcher is closed.
+- Application grouping and monitor/workspace badges are computed from that
+  same single call, with no extra process.
+- The window submenu is a `ListView` that exists only while expanded and
+  scrolls instead of growing the overlay without bound.
 - The overlay and its cards are created by a `LazyLoader` only while open and
   destroyed on close.
 - No screencopy and no thumbnail cache: only app icons at 96×96, decoded
@@ -264,17 +308,23 @@ omarchy-shell -q apach.switcher status    # open state, counts, bind health
 omarchy-shell -q apach.switcher diagnose  # mode, registration, conflicts
 ```
 
-Neither returns window titles or app ids. Paste the output into a bug report
-instead of screenshots of your windows.
+`status` reports the group count, the window count, the selected index, the
+expanded submenu and the bind health. `diagnose` adds the binding mode,
+registration state, conflict count and shortcut names. Neither returns window
+titles, app ids, monitor names or workspace names. Paste the output into a bug
+report instead of screenshots of your windows.
 
 ## Development
 
 ```bash
-node --test tests/*.test.mjs
-node --check Model.js
-omarchy plugin validate .
-/usr/lib/qt6/bin/qmllint Service.qml OverlayWindow.qml HyprBinds.qml
+scripts/check.sh
+```
 
+It runs the Node tests, the hermetic `scripts/static-binds.sh` test, `node
+--check`, shell syntax checks, `omarchy plugin validate` when Omarchy is
+available, and `qmllint` on every QML file when Qt's tooling is installed.
+
+```bash
 # Optional static bindings, from a checkout
 scripts/static-binds.sh on
 scripts/static-binds.sh off

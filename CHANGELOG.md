@@ -49,6 +49,9 @@
 - Keyboard input stays captured on the focused monitor when the overlay is
   mirrored only on another screen. A transparent input surface owns the keys,
   so arrows and Tab no longer reach the window underneath.
+- Navigation keys no longer validate the current card on release. Only the
+  modifier key, Enter/Space, a click or the quick-tap timer commits; Down and
+  Tab now navigate without closing the switcher.
 - Runtime registration no longer stays pending forever: `StdioCollector.text`
   is read as a property (it is not a method), so bind status, verification and
   the one-step retry actually run.

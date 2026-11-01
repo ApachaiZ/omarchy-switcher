@@ -5,7 +5,8 @@ The Switcher runs entirely on the local machine.
 ## What it processes
 
 - The Hyprland client list (`hyprctl clients -j`), in memory, only while the
-  overlay is open: window titles, classes, addresses and workspace names.
+  overlay is open: window titles, classes, addresses, monitor ids and
+  workspace names.
 - `~/.local/state/omarchy/dropdown-state.json`, read locally to identify
   windows managed by Dropdown.
 - `~/.config/omarchy/switcher.json`: the shortcuts and monitor choices you
