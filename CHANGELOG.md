@@ -43,6 +43,9 @@
   rendered only on the selected screens, even when the focused monitor is not
   part of the selection. The focused monitor is a fallback only when none of
   the selected screens is connected.
+- Runtime registration no longer stays pending forever: `StdioCollector.text`
+  is read as a property (it is not a method), so bind status, verification and
+  the one-step retry actually run.
 - Changing the Dropdown shortcut no longer leaves the previous chord bound
   until a reload.
 - Disabling the plugin no longer leaves dead shortcut binds behind.
