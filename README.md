@@ -13,6 +13,9 @@ work directly with [Dropdown](https://github.com/ApachaiZ/omarchy-dropdown).
 - One icon card per **application**, with a centered stylized title above it.
 - Applications with several windows show a chevron and window count below the
   card; `↓` (or a click on the chevron) opens the list of their windows.
+- Each card and each window row shows the monitor and workspace where the
+  window lives (`HDMI-A-1 · 3`). Parked Dropdown windows are labelled
+  `Dropdown`.
 - The selected card zooms and takes the mode's accent colour.
 - **Alt-Tab** mode uses cyan; **Dropdown** mode uses violet, so the two
   contexts are immediately distinguishable.

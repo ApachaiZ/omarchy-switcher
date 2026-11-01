@@ -120,6 +120,8 @@ function parseClients(raw, dropdownWindows, mode) {
         workspace.indexOf("special:") === 0
       var focus = Number(client.focusHistoryID)
       if (!isFinite(focus)) focus = 9999
+      var monitor = Number(client.monitor)
+      if (!isFinite(monitor)) monitor = -1
       list.push({
         addr: address,
         cls: cls,
@@ -128,6 +130,7 @@ function parseClients(raw, dropdownWindows, mode) {
         dropdown: !!dropdown,
         hidden: hidden,
         focus: focus,
+        monitor: monitor,
         workspace: workspace
       })
     }

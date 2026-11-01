@@ -33,8 +33,8 @@ test("Dropdown state maps addresses to validated app ids", () => {
 test("client parsing filters, sorts and identifies Dropdown windows", () => {
   const dropdown = { "0xaaa1": { appId: "system.terminal", cls: "apach.dropdown.terminal", hidden: true } }
   const raw = JSON.stringify([
-    { address: "0xBBB2", class: "brave-browser", title: "Later", mapped: true, focusHistoryID: 3, workspace: { name: "2" }, tags: [] },
-    { address: "0xAAA1", class: "apach.dropdown.terminal", title: "Terminal", mapped: true, focusHistoryID: 0, workspace: { name: "special:special" }, tags: ["dropdown-hidden"] },
+    { address: "0xBBB2", class: "brave-browser", title: "Later", mapped: true, focusHistoryID: 3, monitor: 1, workspace: { name: "2" }, tags: [] },
+    { address: "0xAAA1", class: "apach.dropdown.terminal", title: "Terminal", mapped: true, focusHistoryID: 0, monitor: 0, workspace: { name: "special:special" }, tags: ["dropdown-hidden"] },
     { address: "0xCCC3", class: "unmapped", title: "No", mapped: false, focusHistoryID: 1, workspace: { name: "1" }, tags: [] },
     { address: "0xDDD4", class: "apach.switcher", title: "Self", mapped: true, focusHistoryID: 1, workspace: { name: "1" }, tags: [] }
   ])
@@ -43,6 +43,8 @@ test("client parsing filters, sorts and identifies Dropdown windows", () => {
   assert.equal(all[0].addr, "0xBBB2")
   assert.equal(all[0].title, "Later")
   assert.equal(all[0].dropdown, false)
+  assert.equal(all[0].monitor, 1)
+  assert.equal(all[0].workspace, "2")
   const only = Model.parseClients(raw, dropdown, "dropdown")
   assert.equal(only.length, 1)
   assert.equal(only[0].appId, "system.terminal")

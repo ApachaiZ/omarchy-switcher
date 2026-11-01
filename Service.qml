@@ -511,6 +511,26 @@ Item {
     return entry.appId || entry.cls || "Application"
   }
 
+  function monitorName(id) {
+    var model = Hyprland.monitors
+    var monitors = model && model.values ? model.values : []
+    for (var i = 0; i < monitors.length; i++)
+      if (Number(monitors[i].id) === Number(id)) return String(monitors[i].name || "")
+    return ""
+  }
+
+  // Monitor and workspace badge for a window. Parked Dropdown windows live on
+  // a special workspace, so label them as Dropdown instead of "special".
+  function locationFor(entry) {
+    if (!entry) return ""
+    var monitor = root.monitorName(entry.monitor)
+    var workspace = String(entry.workspace || "")
+    if (entry.hidden) workspace = "Dropdown"
+    else if (workspace.indexOf("special:") === 0) workspace = "special"
+    if (monitor && workspace) return monitor + " · " + workspace
+    return monitor || workspace
+  }
+
   function openSettings() {
     root.mode = "settings"
     root.selected = 0

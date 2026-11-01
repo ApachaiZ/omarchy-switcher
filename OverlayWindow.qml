@@ -126,7 +126,7 @@ PanelWindow {
         id: strip
         visible: service.groups.length > 0
         width: Math.min(cardRow.implicitWidth, panel.width - Style.space(56))
-        height: visible ? 184 : 0
+        height: visible ? 194 : 0
         contentWidth: cardRow.implicitWidth
         contentHeight: height
         clip: true
@@ -164,7 +164,7 @@ PanelWindow {
               readonly property bool isSelected: service.selected === index
 
               width: 136
-              height: 184
+              height: 194
 
               onIsSelectedChanged: if (isSelected) strip.reveal(cardItem.x, cardItem.width)
 
@@ -187,8 +187,21 @@ PanelWindow {
                 elide: Text.ElideRight
               }
 
+              Text {
+                textFormat: Text.PlainText
+                width: parent.width
+                y: 38
+                height: 12
+                text: service.locationFor(cardItem.entry)
+                color: Util.alpha(service.popupText, 0.5)
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+                horizontalAlignment: Text.AlignHCenter
+                elide: Text.ElideRight
+              }
+
               Rectangle {
-                y: 44
+                y: 54
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: 112
                 height: 112
@@ -267,8 +280,8 @@ PanelWindow {
                 visible: cardItem.group.entries.length > 1
                 anchors.horizontalCenter: parent.horizontalCenter
                 // The selected card scales to 1.08, so its bottom edge reaches
-                // ~160 px. Keep the chevron clear of it.
-                y: 164
+                // ~170 px. Keep the chevron clear of it.
+                y: 174
                 text: "▾ " + cardItem.group.entries.length
                 color: cardItem.isSelected
                   ? service.accent
@@ -331,10 +344,11 @@ PanelWindow {
               : "transparent"
 
             Text {
+              id: subTitle
               textFormat: Text.PlainText
               anchors.left: parent.left
               anchors.leftMargin: Style.space(8)
-              anchors.right: parent.right
+              anchors.right: subLocation.left
               anchors.rightMargin: Style.space(8)
               anchors.verticalCenter: parent.verticalCenter
               text: modelData.title
@@ -344,6 +358,18 @@ PanelWindow {
               font.family: Style.font.family
               font.pixelSize: Style.font.bodySmall
               elide: Text.ElideRight
+            }
+
+            Text {
+              id: subLocation
+              textFormat: Text.PlainText
+              anchors.right: parent.right
+              anchors.rightMargin: Style.space(8)
+              anchors.verticalCenter: parent.verticalCenter
+              text: service.locationFor(modelData)
+              color: Util.alpha(service.popupText, 0.45)
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
             }
 
             MouseArea {
