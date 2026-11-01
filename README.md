@@ -10,7 +10,9 @@ work directly with [Dropdown](https://github.com/ApachaiZ/omarchy-dropdown).
 - **Ctrl + Tab** cycles only windows managed by Dropdown.
 - Binds are registered at runtime; no files outside the plugin folder.
 - A central overlay with a translucent, blurred backdrop.
-- One icon card per window, with a centered stylized title above it.
+- One icon card per **application**, with a centered stylized title above it.
+- Applications with several windows show a chevron and window count below the
+  card; `↓` (or a click on the chevron) opens the list of their windows.
 - The selected card zooms and takes the mode's accent colour.
 - **Alt-Tab** mode uses cyan; **Dropdown** mode uses violet, so the two
   contexts are immediately distinguishable.
@@ -109,13 +111,16 @@ backups) and goes back to runtime bindings.
 
 While the overlay is open:
 
-- `Tab` / `Shift+Tab` or `←` / `→` move the selection;
+- `Tab` / `Shift+Tab` or `←` / `→` move the selection between applications;
+- `↓` opens the window list of an application that has several windows;
+  `↑` / `↓` move inside it, and `↑` on the first row closes it again;
 - `Ctrl+Tab` switches the current overlay to Dropdown windows;
 - the all-windows shortcut switches it back to other windows;
-- `Enter` or `Space` activates the selection;
-- `Escape` cancels;
+- `Enter` or `Space` activates the selected window;
+- `Escape` closes the window list first, then the switcher;
 - releasing Alt (all mode) or Ctrl (Dropdown mode) activates the selection;
-- clicking a card activates it; clicking outside cancels.
+- clicking a card activates its most recent window, clicking a window row
+  activates that window, and clicking outside cancels.
 
 A quick tap works too: if the modifier is released before the overlay maps, the
 service checks the live modifier state and commits the initial selection.

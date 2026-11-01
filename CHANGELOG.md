@@ -4,6 +4,8 @@
 
 ### Added
 
+- GNOME-style application grouping: one card per app, a chevron and window
+  count on multi-window apps, and a `↓` submenu listing their windows.
 - Runtime Hyprland integration: the service registers its binds and layer rule
   with `hyprctl eval`, so `omarchy plugin add` is the whole install.
 - Re-registration on Hyprland's `configreloaded` event, with a live bind check

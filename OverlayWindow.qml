@@ -124,9 +124,9 @@ PanelWindow {
 
       Flickable {
         id: strip
-        visible: service.entries.length > 0
+        visible: service.groups.length > 0
         width: Math.min(cardRow.implicitWidth, panel.width - Style.space(56))
-        height: visible ? 162 : 0
+        height: visible ? 176 : 0
         contentWidth: cardRow.implicitWidth
         contentHeight: height
         clip: true
@@ -153,17 +153,18 @@ PanelWindow {
           spacing: Style.space(12)
 
           Repeater {
-            model: service.entries
+            model: service.groups
 
             Item {
               id: cardItem
               required property var modelData
               required property int index
-              readonly property var entry: modelData
+              readonly property var group: modelData
+              readonly property var entry: group.entries.length > 0 ? group.entries[0] : null
               readonly property bool isSelected: service.selected === index
 
               width: 136
-              height: 162
+              height: 176
 
               onIsSelectedChanged: if (isSelected) strip.reveal(cardItem.x, cardItem.width)
 
@@ -171,7 +172,9 @@ PanelWindow {
                 textFormat: Text.PlainText
                 width: parent.width
                 height: 36
-                text: cardItem.entry.title
+                text: cardItem.group.entries.length > 1
+                  ? service.appLabel(cardItem.entry)
+                  : cardItem.entry.title
                 color: cardItem.isSelected ? service.accent : Util.alpha(service.popupText, 0.78)
                 font.family: Style.font.family
                 font.pixelSize: Style.font.body
@@ -248,8 +251,39 @@ PanelWindow {
                   acceptedButtons: Qt.LeftButton
                   cursorShape: Qt.PointingHandCursor
                   onClicked: {
+                    service.expanded = false
+                    service.subIndex = 0
                     service.selected = cardItem.index
-                    service.commit()
+                    service.commit(cardItem.entry)
+                  }
+                }
+              }
+
+              // Multi-window applications show a chevron below the card. The
+              // Down key expands the same submenu; clicking the chevron does
+              // the same without activating a window.
+              Text {
+                textFormat: Text.PlainText
+                visible: cardItem.group.entries.length > 1
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: 158
+                text: "▾ " + cardItem.group.entries.length
+                color: cardItem.isSelected
+                  ? service.accent
+                  : Util.alpha(service.popupText, 0.55)
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+                font.bold: cardItem.isSelected
+
+                MouseArea {
+                  anchors.fill: parent
+                  anchors.margins: -6
+                  acceptedButtons: Qt.LeftButton
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: {
+                    service.selected = cardItem.index
+                    service.subIndex = 0
+                    service.expanded = cardItem.group.entries.length > 1
                   }
                 }
               }
@@ -258,9 +292,75 @@ PanelWindow {
         }
       }
 
+      // Window list for the selected application. Opened with Down or the
+      // chevron; it scrolls when a group has more windows than fit.
+      Rectangle {
+        visible: service.expanded && service.selectedGroup !== null
+          && service.selectedGroup.entries.length > 1
+        width: Math.min(panel.width - Style.space(56), Style.space(360))
+        height: visible
+          ? Math.min(service.selectedGroup.entries.length * Style.space(28) + Style.space(12),
+              Style.space(208))
+          : 0
+        anchors.horizontalCenter: parent.horizontalCenter
+        radius: Math.max(10, Style.cornerRadius - 6)
+        color: Qt.rgba(service.popupBackground.r, service.popupBackground.g,
+          service.popupBackground.b, 0.98)
+        border.width: 1
+        border.color: Util.alpha(service.accent, 0.4)
+
+        ListView {
+          id: subList
+          anchors.fill: parent
+          anchors.margins: Style.space(6)
+          model: service.selectedGroup ? service.selectedGroup.entries : []
+          currentIndex: service.subIndex
+          boundsBehavior: Flickable.StopAtBounds
+          clip: true
+          interactive: false
+          delegate: Rectangle {
+            required property var modelData
+            required property int index
+            width: ListView.view.width
+            height: Style.space(28)
+            radius: Math.max(6, Style.cornerRadius - 10)
+            color: index === service.subIndex
+              ? Util.alpha(service.accent, 0.18)
+              : "transparent"
+
+            Text {
+              textFormat: Text.PlainText
+              anchors.left: parent.left
+              anchors.leftMargin: Style.space(8)
+              anchors.right: parent.right
+              anchors.rightMargin: Style.space(8)
+              anchors.verticalCenter: parent.verticalCenter
+              text: modelData.title
+              color: index === service.subIndex
+                ? service.accent
+                : Util.alpha(service.popupText, 0.8)
+              font.family: Style.font.family
+              font.pixelSize: Style.font.bodySmall
+              elide: Text.ElideRight
+            }
+
+            MouseArea {
+              anchors.fill: parent
+              acceptedButtons: Qt.LeftButton
+              cursorShape: Qt.PointingHandCursor
+              onClicked: {
+                service.subIndex = index
+                service.commit(modelData)
+              }
+            }
+          }
+          onCurrentIndexChanged: if (count > 0) positionViewAtIndex(currentIndex, ListView.Contain)
+        }
+      }
+
       Text {
         textFormat: Text.PlainText
-        visible: service.entries.length === 0
+        visible: service.groups.length === 0
         width: parent.width
         height: visible ? 88 : 0
         horizontalAlignment: Text.AlignHCenter

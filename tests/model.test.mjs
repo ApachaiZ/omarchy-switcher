@@ -48,6 +48,26 @@ test("client parsing filters, sorts and identifies Dropdown windows", () => {
   assert.equal(only[0].appId, "system.terminal")
 })
 
+test("windows are grouped by application in focus order", () => {
+  const entries = [
+    { addr: "0x1", cls: "kitty", appId: "", title: "a" },
+    { addr: "0x2", cls: "brave-browser", appId: "", title: "b" },
+    { addr: "0x3", cls: "kitty", appId: "", title: "c" },
+    { addr: "0x4", cls: "", appId: "system.terminal", title: "d" },
+    { addr: "0x5", cls: "", appId: "system.terminal", title: "e" },
+    { addr: "0x6", cls: "", appId: "", title: "f" }
+  ]
+  const groups = Model.groupEntries(entries)
+  assert.equal(groups.length, 4)
+  assert.deepEqual(groups.map((g) => g.key), ["kitty", "brave-browser", "system.terminal", "0x6"])
+  assert.deepEqual(groups[0].entries.map((e) => e.addr), ["0x1", "0x3"])
+  assert.deepEqual(groups[2].entries.map((e) => e.addr), ["0x4", "0x5"])
+  assert.equal(groups[1].entries.length, 1)
+  assert.equal(groups[0].label, "kitty")
+  assert.equal(Model.groupEntries([]).length, 0)
+  assert.equal(Model.groupEntries(null).length, 0)
+})
+
 test("initial selection is the previous window, reverse starts at the end", () => {
   assert.equal(Model.initialIndex(0, false), -1)
   assert.equal(Model.initialIndex(1, false), 0)

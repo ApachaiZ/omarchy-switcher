@@ -142,6 +142,36 @@ function parseClients(raw, dropdownWindows, mode) {
 
 // Classic Alt-Tab starts on the previous window, not the current one; a
 // reverse summon starts on the oldest entry.
+// GNOME-style grouping: one card per application. Groups keep the focus order
+// of the window list (the first window of a group is its most recent one), and
+// windows inside a group stay in the same order. An entry without appId or
+// class falls back to its address so it still gets its own card.
+function groupEntries(entries) {
+  var list = Array.isArray(entries) ? entries : []
+  var groups = []
+  var byKey = {}
+  for (var i = 0; i < list.length; i++) {
+    var entry = list[i]
+    if (!entry) continue
+    var key = String(entry.appId || entry.cls || entry.addr || "")
+    if (!key) continue
+    var group = byKey[key]
+    if (!group) {
+      group = {
+        key: key,
+        appId: String(entry.appId || ""),
+        cls: String(entry.cls || ""),
+        label: String(entry.appId || entry.cls || entry.title || "Application"),
+        entries: []
+      }
+      byKey[key] = group
+      groups.push(group)
+    }
+    group.entries.push(entry)
+  }
+  return groups
+}
+
 function initialIndex(length, reverse) {
   if (!length) return -1
   if (reverse) return length - 1
@@ -521,6 +551,7 @@ if (typeof module !== "undefined") {
     dropdownEnabledFromShellConfig: dropdownEnabledFromShellConfig,
     parseDropdownState: parseDropdownState,
     parseClients: parseClients,
+    groupEntries: groupEntries,
     initialIndex: initialIndex,
     shortcutPresets: shortcutPresets,
     allShortcutPresets: allShortcutPresets,

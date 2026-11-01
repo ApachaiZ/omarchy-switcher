@@ -14,7 +14,12 @@ Item {
   property string mode: "all"
   property bool open: false
   property var entries: []
+  // One card per application; selected indexes groups, not windows.
+  readonly property var groups: Model.groupEntries(entries)
+  readonly property var selectedGroup: groups[selected] || null
   property int selected: -1
+  property bool expanded: false
+  property int subIndex: 0
   property var dropdownWindows: ({})
   property var settings: Model.defaultSettings()
   property string pendingMode: "all"
@@ -55,6 +60,8 @@ Item {
       if (dropdownEnabled) parts.push(dropdownPreset.label + " for Dropdown")
     }
     parts.push("Tab/Shift+Tab")
+    if (selectedGroup && selectedGroup.entries.length > 1)
+      parts.push(expanded ? "↑/↓ windows" : "↓ windows")
     parts.push("Enter")
     parts.push("Esc")
     parts.push(settingsHint + " settings")
@@ -260,10 +267,13 @@ Item {
   function onClients(raw) {
     if (!root.pendingMode) return
     var list = Model.parseClients(raw, root.dropdownWindows, root.pendingMode)
+    var grouped = Model.groupEntries(list)
     root.entries = list
     root.mode = root.pendingMode
     root.pendingMode = root.mode
-    root.selected = Model.initialIndex(list.length, root.pendingReverse)
+    root.selected = Model.initialIndex(grouped.length, root.pendingReverse)
+    root.expanded = false
+    root.subIndex = 0
     root.pendingReverse = false
     root.sawKeyEvent = false
     root.open = true
@@ -299,8 +309,38 @@ Item {
   }
 
   function cycle(delta) {
-    if (!root.entries.length || root.selected < 0) return
-    root.selected = (root.selected + delta + root.entries.length) % root.entries.length
+    if (!root.groups.length || root.selected < 0) return
+    root.expanded = false
+    root.subIndex = 0
+    root.selected = (root.selected + delta + root.groups.length) % root.groups.length
+  }
+
+  // GNOME-style submenu for applications with several windows: Down opens it
+  // on the selected card, Up/Down move inside it, Up at the first row closes
+  // it, and committing uses the highlighted window.
+  function expandSelected() {
+    var group = root.selectedGroup
+    if (!group || group.entries.length < 2) return
+    root.expanded = true
+    root.subIndex = 0
+  }
+
+  function cycleSub(delta) {
+    var group = root.selectedGroup
+    if (!group || group.entries.length === 0) return
+    root.subIndex = (root.subIndex + delta + group.entries.length) % group.entries.length
+  }
+
+  function collapseSub() {
+    if (root.subIndex > 0) root.subIndex--
+    else root.expanded = false
+  }
+
+  function selectedWindow() {
+    var group = root.selectedGroup
+    if (!group || group.entries.length === 0) return null
+    if (root.expanded) return group.entries[root.subIndex] || group.entries[0]
+    return group.entries[0]
   }
 
   function cancel() {
@@ -309,14 +349,18 @@ Item {
     root.pendingEntry = null
     root.entries = []
     root.selected = -1
+    root.expanded = false
+    root.subIndex = 0
   }
 
-  function commit() {
-    var entry = root.entries[root.selected] || null
+  function commit(target) {
+    var entry = target !== undefined ? target : root.selectedWindow()
     root.open = false
     root.pendingEntry = entry
     root.entries = []
     root.selected = -1
+    root.expanded = false
+    root.subIndex = 0
     if (entry) activationTimer.restart()
   }
 
@@ -340,7 +384,23 @@ Item {
   function handlePressed(event) {
     root.sawKeyEvent = true
     if (event.key === Qt.Key_Escape) {
-      root.cancel()
+      if (root.expanded) {
+        root.expanded = false
+        root.subIndex = 0
+      } else {
+        root.cancel()
+      }
+      event.accepted = true
+      return
+    }
+    if (event.key === Qt.Key_Down) {
+      if (root.expanded) root.cycleSub(1)
+      else root.expandSelected()
+      event.accepted = true
+      return
+    }
+    if (event.key === Qt.Key_Up) {
+      if (root.expanded) root.collapseSub()
       event.accepted = true
       return
     }
@@ -456,6 +516,8 @@ Item {
     root.selected = 0
     root.sawKeyEvent = false
     root.entries = []
+    root.expanded = false
+    root.subIndex = 0
     root.open = true
     hyprBinds.refreshConflicts()
   }
@@ -543,8 +605,11 @@ Item {
       return JSON.stringify({
         open: root.open,
         mode: root.mode,
-        count: root.entries.length,
+        count: root.groups.length,
+        windows: root.entries.length,
         selected: root.selected,
+        expanded: root.expanded,
+        sub: root.subIndex,
         preset: root.settings.dropdownShortcut,
         allShortcut: root.settings.allShortcut,
         binds: hyprBinds.status
