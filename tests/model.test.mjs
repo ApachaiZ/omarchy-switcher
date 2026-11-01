@@ -84,3 +84,27 @@ test("icon names and sources are restricted to local values", () => {
   assert.equal(Model.safeIconSource("https://tracker.example/x.png"), "")
   assert.equal(Model.safeIconSource("data:image/png;base64,AAAA"), "")
 })
+
+test("screen selection settings are validated and serialized", () => {
+  const parsed = Model.parseSettings(JSON.stringify({
+    dropdownShortcut: "CTRL + TAB",
+    followActive: false,
+    screens: ["HDMI-A-1", "HDMI-A-2", "HDMI-A-1", "../bad", "eDP-1"]
+  }))
+  assert.equal(parsed.followActive, false)
+  assert.deepEqual(parsed.screens, ["HDMI-A-1", "HDMI-A-2", "eDP-1"])
+  assert.equal(Model.parseSettings("{}").followActive, true)
+  assert.deepEqual(Model.parseSettings("{}").screens, [])
+  const out = JSON.parse(Model.serializeSettings(parsed))
+  assert.equal(out.followActive, false)
+  assert.deepEqual(out.screens, ["HDMI-A-1", "HDMI-A-2", "eDP-1"])
+})
+
+test("Dropdown is detected from the shell bar layout", () => {
+  const enabled = JSON.stringify({ bar: { layout: { center: [{ id: "apach.dropdown" }] } } })
+  assert.equal(Model.dropdownEnabledFromShellConfig(enabled), true)
+  assert.equal(Model.dropdownEnabledFromShellConfig(JSON.stringify({ bar: { layout: { right: [{ id: "apach.dropdown" }] } } })), true)
+  assert.equal(Model.dropdownEnabledFromShellConfig(JSON.stringify({ bar: { layout: { center: [] } } })), false)
+  assert.equal(Model.dropdownEnabledFromShellConfig(JSON.stringify({ bar: { layout: { center: [{ id: "apach.dropdown" }] } }, disabledPlugins: ["apach.dropdown"] })), false)
+  assert.equal(Model.dropdownEnabledFromShellConfig("not json"), false)
+})

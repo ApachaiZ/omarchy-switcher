@@ -12,15 +12,16 @@ work directly with [Dropdown](https://github.com/ApachaiZ/omarchy-dropdown).
 - The selected card zooms and takes the mode's accent colour.
 - **Alt-Tab** mode uses cyan; **Dropdown** mode uses violet, so the two
   contexts are immediately distinguishable.
-- **Settings**: `Super + Alt + S` anywhere, or `S` while the switcher is open.
+- **Settings**: `Super + Alt + S` when closed, or `Alt+S` / `Ctrl+S` inside the
+  overlay (the modifier follows the mode).
 - No screen capture. Icons are local; titles are rendered as plain text.
 
 
 ## Screenshots
 
-| Other windows | Dropdown windows |
+| Windows | Dropdown windows |
 | --- | --- |
-| ![Other windows](docs/screenshots/switcher-all.png) | ![Dropdown windows](docs/screenshots/switcher-dropdown.png) |
+| ![Windows](docs/screenshots/switcher-all.png) | ![Dropdown windows](docs/screenshots/switcher-dropdown.png) |
 
 ![Settings](docs/screenshots/switcher-settings.png)
 
@@ -76,11 +77,26 @@ While the overlay is open:
 A quick tap works too: if the modifier is released before the overlay maps, the
 service checks the live modifier state and commits the initial selection.
 
-## Settings
+## Settings and screens
 
 Open the settings with the **⚙** button in the overlay, with **Alt+S** in the
 all-windows mode, with **Ctrl+S** in Dropdown mode (or **Super+S** if you chose
 the Super+Tab preset), or with **Super + Alt + S** when the switcher is closed.
+
+The display section lets you choose between:
+
+- **Active screen only** (on by default): the overlay follows the focused
+  monitor;
+- a **list of detected screens with a toggle each**: pick one or several
+  monitors; the overlay is mirrored on every selected screen, with keyboard
+  focus on the focused monitor when it is part of the selection (otherwise on
+  the first selected screen).
+
+Toggle rows with `Enter`/`Space` or the mouse. The screen names come from
+Quickshell and are validated before being stored. `Ctrl+Tab` is only bound
+when the **Dropdown plugin is enabled**; if Dropdown is absent or disabled,
+the shortcut is left to the rest of the desktop and the hint omits it.
+
 Choose the Dropdown shortcut from the keyboard (`↑`/`↓`, `Enter`) or with the
 mouse:
 

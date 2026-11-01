@@ -58,6 +58,31 @@ function safeIconSource(value) {
   return ""
 }
 
+// Whether Dropdown is enabled according to shell.json. It is a bar widget, so
+// its id appears in bar.layout.* while enabled; disabledPlugins is checked too.
+function dropdownEnabledFromShellConfig(raw) {
+  try {
+    var config = JSON.parse(String(raw || "{}"))
+    if (!config || typeof config !== "object") return false
+    var disabled = Array.isArray(config.disabledPlugins) ? config.disabledPlugins : []
+    if (disabled.indexOf("apach.dropdown") !== -1) return false
+    var layout = config.bar && config.bar.layout
+    if (!layout || typeof layout !== "object") return false
+    var sections = ["left", "center", "right"]
+    for (var s = 0; s < sections.length; s++) {
+      var list = layout[sections[s]]
+      if (!Array.isArray(list)) continue
+      for (var i = 0; i < list.length; i++) {
+        var entry = list[i]
+        var id = entry && typeof entry === "object" ? String(entry.id || "") : String(entry || "")
+        if (id === "apach.dropdown") return true
+      }
+    }
+  } catch (e) {
+  }
+  return false
+}
+
 // Build the flat card list. One card per window, most recently focused first.
 // mode "dropdown" keeps only windows whose address is present in the Dropdown
 // state map; mode "all" keeps every mapped window.
@@ -122,8 +147,13 @@ function shortcutPresets() {
   ]
 }
 
+function safeScreenName(value) {
+  var text = String(value || "").trim()
+  return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(text) ? text : ""
+}
+
 function defaultSettings() {
-  return { version: 1, dropdownShortcut: "CTRL + TAB" }
+  return { version: 1, dropdownShortcut: "CTRL + TAB", followActive: true, screens: [] }
 }
 
 function presetForKey(key) {
@@ -137,8 +167,20 @@ function presetForKey(key) {
 function parseSettings(raw) {
   try {
     var parsed = JSON.parse(String(raw || ""))
-    var shortcut = parsed && parsed.dropdownShortcut
-    if (shortcut) return { version: 1, dropdownShortcut: presetForKey(shortcut).key }
+    if (!parsed || typeof parsed !== "object") return defaultSettings()
+    var screens = []
+    if (Array.isArray(parsed.screens)) {
+      for (var i = 0; i < parsed.screens.length; i++) {
+        var name = safeScreenName(parsed.screens[i])
+        if (name && screens.indexOf(name) === -1) screens.push(name)
+      }
+    }
+    return {
+      version: 1,
+      dropdownShortcut: presetForKey(parsed.dropdownShortcut).key,
+      followActive: parsed.followActive !== false,
+      screens: screens
+    }
   } catch (e) {
   }
   return defaultSettings()
@@ -146,9 +188,18 @@ function parseSettings(raw) {
 
 function serializeSettings(settings) {
   var value = settings || defaultSettings()
+  var screens = []
+  if (Array.isArray(value.screens)) {
+    for (var i = 0; i < value.screens.length; i++) {
+      var name = safeScreenName(value.screens[i])
+      if (name && screens.indexOf(name) === -1) screens.push(name)
+    }
+  }
   return JSON.stringify({
     version: 1,
-    dropdownShortcut: presetForKey(value.dropdownShortcut).key
+    dropdownShortcut: presetForKey(value.dropdownShortcut).key,
+    followActive: value.followActive !== false,
+    screens: screens
   }, null, 2) + "\n"
 }
 
@@ -165,11 +216,20 @@ function luaForSettings(settings) {
     'hl.unbind("' + preset.key + '")',
     'hl.unbind("' + preset.reverse + '")',
     "",
-    'o.bind("ALT + TAB", "Switcher: toutes les fenêtres", "omarchy-shell -q apach.switcher next")',
-    'o.bind("ALT + SHIFT + TAB", "Switcher: fenêtres inversées", "omarchy-shell -q apach.switcher prev")',
-    'o.bind("' + preset.key + '", "Switcher: fenêtres Dropdown", "omarchy-shell -q apach.switcher nextDropdown")',
-    'o.bind("' + preset.reverse + '", "Switcher: fenêtres Dropdown inversées", "omarchy-shell -q apach.switcher prevDropdown")',
-    'o.bind("SUPER + ALT + S", "Switcher: réglages", "omarchy-shell -q apach.switcher settings")',
+    'o.bind("ALT + TAB", "Switcher: all windows", "omarchy-shell -q apach.switcher next")',
+    'o.bind("ALT + SHIFT + TAB", "Switcher: reverse windows", "omarchy-shell -q apach.switcher prev")',
+    'local function switcherHasDropdown()',
+    '  local file = io.open(os.getenv("HOME") .. "/.config/omarchy/shell.json", "r")',
+    '  if not file then return false end',
+    '  local data = file:read("*a") or ""',
+    '  file:close()',
+    '  return data:find(\'"apach.dropdown"\', 1, true) ~= nil',
+    'end',
+    'if switcherHasDropdown() then',
+    '  o.bind("' + preset.key + '", "Switcher: Dropdown windows", "omarchy-shell -q apach.switcher nextDropdown")',
+    '  o.bind("' + preset.reverse + '", "Switcher: reverse Dropdown windows", "omarchy-shell -q apach.switcher prevDropdown")',
+    'end',
+    'o.bind("SUPER + ALT + S", "Switcher: settings", "omarchy-shell -q apach.switcher settings")',
     ""
   ].join("\n")
 }
@@ -178,8 +238,10 @@ if (typeof module !== "undefined") {
   module.exports = {
     validAddress: validAddress,
     validAppId: validAppId,
+    safeScreenName: safeScreenName,
     safeIconName: safeIconName,
     safeIconSource: safeIconSource,
+    dropdownEnabledFromShellConfig: dropdownEnabledFromShellConfig,
     parseDropdownState: parseDropdownState,
     parseClients: parseClients,
     initialIndex: initialIndex,

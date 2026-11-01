@@ -6,8 +6,17 @@ hl.unbind("ALT + SHIFT + TAB")
 hl.unbind("CTRL + TAB")
 hl.unbind("CTRL + SHIFT + TAB")
 
-o.bind("ALT + TAB", "Switcher: toutes les fenêtres", "omarchy-shell -q apach.switcher next")
-o.bind("ALT + SHIFT + TAB", "Switcher: fenêtres inversées", "omarchy-shell -q apach.switcher prev")
-o.bind("CTRL + TAB", "Switcher: fenêtres Dropdown", "omarchy-shell -q apach.switcher nextDropdown")
-o.bind("CTRL + SHIFT + TAB", "Switcher: fenêtres Dropdown inversées", "omarchy-shell -q apach.switcher prevDropdown")
-o.bind("SUPER + ALT + S", "Switcher: réglages", "omarchy-shell -q apach.switcher settings")
+o.bind("ALT + TAB", "Switcher: all windows", "omarchy-shell -q apach.switcher next")
+o.bind("ALT + SHIFT + TAB", "Switcher: reverse windows", "omarchy-shell -q apach.switcher prev")
+local function switcherHasDropdown()
+  local file = io.open(os.getenv("HOME") .. "/.config/omarchy/shell.json", "r")
+  if not file then return false end
+  local data = file:read("*a") or ""
+  file:close()
+  return data:find('"apach.dropdown"', 1, true) ~= nil
+end
+if switcherHasDropdown() then
+  o.bind("CTRL + TAB", "Switcher: Dropdown windows", "omarchy-shell -q apach.switcher nextDropdown")
+  o.bind("CTRL + SHIFT + TAB", "Switcher: reverse Dropdown windows", "omarchy-shell -q apach.switcher prevDropdown")
+end
+o.bind("SUPER + ALT + S", "Switcher: settings", "omarchy-shell -q apach.switcher settings")
