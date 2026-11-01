@@ -239,6 +239,17 @@ PanelWindow {
         font.letterSpacing: 0.8
       }
 
+      Text {
+        textFormat: Text.PlainText
+        width: parent.width
+        horizontalAlignment: Text.AlignHCenter
+        text: "The focused screen is always included."
+        color: Util.alpha(service.popupText, 0.5)
+        font.family: Style.font.family
+        font.pixelSize: Style.font.caption
+        wrapMode: Text.WordWrap
+      }
+
       Repeater {
         model: service.displayItems
 

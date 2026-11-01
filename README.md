@@ -132,9 +132,9 @@ The display section lets you choose between:
 - **Active screen only** (on by default): the overlay follows the focused
   monitor;
 - a **list of detected screens with a toggle each**: pick one or several
-  monitors; the overlay is mirrored on every selected screen, with keyboard
-  focus on the focused monitor when it is part of the selection (otherwise on
-  the first selected screen).
+  monitors; the overlay is mirrored on every selected screen **and always
+  appears on the focused monitor**, which keeps keyboard focus. Mirroring only
+  a secondary screen can therefore never make the overlay invisible.
 
 Toggle rows with `Enter`/`Space` or the mouse. The screen names come from
 Quickshell and are validated before being stored. `Ctrl+Tab` is only bound

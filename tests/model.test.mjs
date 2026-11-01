@@ -187,6 +187,24 @@ test("icon names and sources are restricted to local values", () => {
   assert.equal(Model.safeIconSource("data:image/png;base64,AAAA"), "")
 })
 
+test("the focused screen is always included in the overlay list", () => {
+  const screens = ["HDMI-A-1", "HDMI-A-2", "eDP-1"]
+  assert.deepEqual(Model.displayScreensFor({ followActive: true, screens: [] }, screens, "HDMI-A-2"), ["HDMI-A-2"])
+  assert.deepEqual(
+    Model.displayScreensFor({ followActive: false, screens: ["HDMI-A-1"] }, screens, "HDMI-A-2"),
+    ["HDMI-A-1", "HDMI-A-2"]
+  )
+  assert.deepEqual(
+    Model.displayScreensFor({ followActive: false, screens: ["HDMI-A-2"] }, screens, "HDMI-A-2"),
+    ["HDMI-A-2"]
+  )
+  assert.deepEqual(
+    Model.displayScreensFor({ followActive: false, screens: ["../bad", "eDP-1"] }, screens, ""),
+    ["eDP-1"]
+  )
+  assert.deepEqual(Model.displayScreensFor({ followActive: true, screens: [] }, screens, ""), [])
+})
+
 test("screen selection settings are validated and serialized", () => {
   const parsed = Model.parseSettings(JSON.stringify({
     dropdownShortcut: "CTRL + TAB",

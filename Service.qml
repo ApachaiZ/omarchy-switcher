@@ -89,15 +89,9 @@ Item {
     return Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
   }
 
-  readonly property var displayScreens: {
-    if (settings.followActive)
-      return activeScreenName ? [activeScreenName] : []
-    var valid = []
-    for (var i = 0; i < screenNames.length; i++)
-      if (settings.screens.indexOf(screenNames[i]) !== -1) valid.push(screenNames[i])
-    if (valid.length === 0 && activeScreenName) valid = [activeScreenName]
-    return valid
-  }
+  // The focused monitor is always part of the list, so mirroring a secondary
+  // screen can never leave the overlay invisible on the active one.
+  readonly property var displayScreens: Model.displayScreensFor(settings, screenNames, activeScreenName)
 
   readonly property string focusScreenName: {
     if (activeScreenName && displayScreens.indexOf(activeScreenName) !== -1) return activeScreenName

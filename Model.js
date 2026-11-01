@@ -178,6 +178,29 @@ function safeScreenName(value) {
   return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(text) ? text : ""
 }
 
+// Screens the overlay is rendered on. The focused monitor is always included:
+// a configuration that mirrors selected secondary screens must never make the
+// overlay invisible from the screen the user is looking at.
+function displayScreensFor(settings, screenNames, activeName) {
+  var value = settings || defaultSettings()
+  var available = Array.isArray(screenNames) ? screenNames : []
+  var active = String(activeName || "")
+  var out = []
+
+  if (value.followActive) {
+    if (active) out.push(active)
+    return out
+  }
+
+  var wanted = Array.isArray(value.screens) ? value.screens : []
+  for (var i = 0; i < available.length; i++) {
+    var name = String(available[i] || "")
+    if (name && wanted.indexOf(name) !== -1 && out.indexOf(name) === -1) out.push(name)
+  }
+  if (active && out.indexOf(active) === -1) out.push(active)
+  return out
+}
+
 function nonCollidingPreset(key) {
   var presets = shortcutPresets()
   for (var i = 0; i < presets.length; i++)
@@ -491,6 +514,7 @@ if (typeof module !== "undefined") {
   module.exports = {
     validAddress: validAddress,
     validAppId: validAppId,
+    displayScreensFor: displayScreensFor,
     safeIconName: safeIconName,
     safeIconSource: safeIconSource,
     dropdownEnabledFromShellConfig: dropdownEnabledFromShellConfig,

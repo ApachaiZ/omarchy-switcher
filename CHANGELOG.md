@@ -39,6 +39,8 @@
 
 ### Fixed
 
+- The overlay is always rendered on the focused monitor. Mirroring only a
+  secondary screen no longer makes it invisible from the screen in use.
 - Changing the Dropdown shortcut no longer leaves the previous chord bound
   until a reload.
 - Disabling the plugin no longer leaves dead shortcut binds behind.
