@@ -270,7 +270,6 @@ Item {
   }
 
   FileView {
-    id: staticFile
     path: root.staticPath
     watchChanges: true
     printErrors: false
@@ -286,7 +285,6 @@ Item {
   }
 
   FileView {
-    id: hyprlandFile
     path: root.hyprlandPath
     watchChanges: true
     printErrors: false
@@ -302,7 +300,6 @@ Item {
   }
 
   FileView {
-    id: bindingsFile
     path: root.bindingsPath
     watchChanges: true
     printErrors: false

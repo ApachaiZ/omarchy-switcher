@@ -149,7 +149,6 @@ test("live bind parsing reports missing shortcuts and real conflicts", () => {
   const result = Model.parseBinds(JSON.stringify(binds), chords)
   assert.deepEqual(result.missing, [])
   assert.deepEqual(result.conflicts, [{ chord: "CTRL + TAB", description: "Terminal palette" }])
-  assert.deepEqual(result.owners["ALT + TAB"], ["Focus on next window", "Switcher: all windows"])
 
   const gone = Model.parseBinds(JSON.stringify(binds.slice(0, 1)), chords)
   assert.deepEqual(gone.missing, chords)

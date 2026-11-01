@@ -10,7 +10,6 @@ PanelWindow {
   required property var service
   property var windowScreen
 
-
   // One row for every shortcut preset; keeps the two shortcut sections
   // visually identical without duplicating the layout.
   component ShortcutRow: Rectangle {
@@ -264,7 +263,6 @@ PanelWindow {
             : Util.alpha(service.popupText, 0.04)
           border.width: service.selected === itemIndex ? 1 : 0
           border.color: service.accent
-          opacity: 1.0
 
           Text {
             textFormat: Text.PlainText

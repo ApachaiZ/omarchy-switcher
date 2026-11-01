@@ -335,6 +335,13 @@ function oBindLine(bind) {
 //
 // Binds are expressed as data so the two generators cannot drift apart.
 
+var BIND_PREFIX = "Switcher:"
+var IPC_PREFIX = "omarchy-shell -q apach.switcher "
+
+function ipcCommand(action) {
+  return IPC_PREFIX + action
+}
+
 function bindEntries(settings, dropdownEnabled) {
   var source = settings || defaultSettings()
   var all = allPresetForKey(source.allShortcut)
@@ -342,28 +349,28 @@ function bindEntries(settings, dropdownEnabled) {
   var list = [
     {
       chord: all.key,
-      description: "Switcher: all windows",
-      command: "omarchy-shell -q apach.switcher next",
+      description: BIND_PREFIX + " all windows",
+      command: ipcCommand("next"),
       dropdown: false
     },
     {
       chord: all.reverse,
-      description: "Switcher: reverse windows",
-      command: "omarchy-shell -q apach.switcher prev",
+      description: BIND_PREFIX + " reverse windows",
+      command: ipcCommand("prev"),
       dropdown: false
     }
   ]
   if (dropdownEnabled) {
     list.push({
       chord: preset.key,
-      description: "Switcher: Dropdown windows",
-      command: "omarchy-shell -q apach.switcher nextDropdown",
+      description: BIND_PREFIX + " Dropdown windows",
+      command: ipcCommand("nextDropdown"),
       dropdown: true
     })
     list.push({
       chord: preset.reverse,
-      description: "Switcher: reverse Dropdown windows",
-      command: "omarchy-shell -q apach.switcher prevDropdown",
+      description: BIND_PREFIX + " reverse Dropdown windows",
+      command: ipcCommand("prevDropdown"),
       dropdown: true
     })
   }
@@ -443,14 +450,12 @@ function parseBinds(raw, chords) {
   }
   if (!Array.isArray(binds)) binds = []
 
-  var owners = {}
   var missing = []
   var conflicts = []
   for (var i = 0; i < chords.length; i++) {
     var chord = String(chords[i] || "")
     var wanted = chordToBind(chord)
     if (!wanted.key) continue
-    var descriptions = []
     var ours = false
     for (var j = 0; j < binds.length; j++) {
       var bind = binds[j]
@@ -458,15 +463,13 @@ function parseBinds(raw, chords) {
       if (Number(bind.modmask || 0) !== wanted.modmask) continue
       if (String(bind.key || "").toUpperCase() !== wanted.key) continue
       var description = String(bind.description || "")
-      descriptions.push(description)
-      if (description.indexOf("Switcher:") === 0) ours = true
+      if (description.indexOf(BIND_PREFIX) === 0) ours = true
       else if (BENIGN_BINDS.indexOf(description) === -1)
         conflicts.push({ chord: chord, description: description })
     }
-    owners[chord] = descriptions
     if (!ours) missing.push(chord)
   }
-  return { owners: owners, missing: missing, conflicts: conflicts }
+  return { missing: missing, conflicts: conflicts }
 }
 
 // Chord, description and command values are internal constants, but escape

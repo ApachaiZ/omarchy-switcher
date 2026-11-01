@@ -5,6 +5,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+command -v node >/dev/null 2>&1 || {
+  echo "check.sh: node is required" >&2
+  exit 1
+}
+
 node --test tests/*.test.mjs
 node --check Model.js
 bash -n scripts/*.sh tests/*.sh

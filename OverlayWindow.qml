@@ -185,7 +185,6 @@ PanelWindow {
               }
 
               Rectangle {
-                id: card
                 y: 44
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: 112

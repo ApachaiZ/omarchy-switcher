@@ -25,7 +25,6 @@ Item {
 
   readonly property string home: Quickshell.env("HOME")
   readonly property string settingsPath: home + "/.config/omarchy/switcher.json"
-  readonly property string bindsPath: home + "/.config/hypr/switcher.lua"
   readonly property string dropdownStatePath: home + "/.local/state/omarchy/dropdown-state.json"
 
   property bool settingsLoaded: false
@@ -182,7 +181,7 @@ Item {
   // the optional static file in sync with the chosen shortcuts.
   FileView {
     id: bindsFile
-    path: root.bindsPath
+    path: hyprBinds.staticPath
     printErrors: false
   }
 
@@ -219,7 +218,7 @@ Item {
     ? (dropdownUsesSuper
       ? 'hl.is_key_down("Super_L") or hl.is_key_down("Super_R")'
       : 'hl.is_key_down("Control_L") or hl.is_key_down("Control_R")')
-    : 'hl.is_key_down("Alt_L") or hl.is_key_down("Alt_R")' 
+    : 'hl.is_key_down("Alt_L") or hl.is_key_down("Alt_R")'
 
   Timer {
     id: modTimer
@@ -451,15 +450,20 @@ Item {
     root.applyShortcuts(preset.key, root.settings.dropdownShortcut)
   }
 
-  function applyShortcuts(allShortcut, dropdownShortcut) {
-    // parseSettings normalizes both values and resolves a collision between
-    // the all-windows and Dropdown shortcuts.
-    root.settings = Model.parseSettings(JSON.stringify({
+  // parseSettings normalizes the shortcut values, resolves a collision between
+  // the all-windows and Dropdown shortcuts, and validates screen names.
+  function normalizedSettings(allShortcut, dropdownShortcut, followActive, screens) {
+    return Model.parseSettings(JSON.stringify({
       allShortcut: allShortcut,
       dropdownShortcut: dropdownShortcut,
-      followActive: root.settings.followActive,
-      screens: root.settings.screens
+      followActive: followActive,
+      screens: screens
     }))
+  }
+
+  function applyShortcuts(allShortcut, dropdownShortcut) {
+    root.settings = root.normalizedSettings(allShortcut, dropdownShortcut,
+      root.settings.followActive, root.settings.screens)
     settingsFile.setText(Model.serializeSettings(root.settings))
     if (hyprBinds.legacy) {
       // Static installs keep the generated file in sync, then reload Hyprland.
@@ -471,12 +475,8 @@ Item {
   }
 
   function saveDisplaySettings(followActive, screens) {
-    root.settings = Model.parseSettings(JSON.stringify({
-      allShortcut: root.settings.allShortcut,
-      dropdownShortcut: root.settings.dropdownShortcut,
-      followActive: followActive,
-      screens: screens
-    }))
+    root.settings = root.normalizedSettings(root.settings.allShortcut,
+      root.settings.dropdownShortcut, followActive, screens)
     settingsFile.setText(Model.serializeSettings(root.settings))
   }
 
@@ -557,7 +557,6 @@ Item {
   }
 
   LazyLoader {
-    id: settingsLoader
     active: root.open && root.mode === "settings"
 
     SettingsPanel {
