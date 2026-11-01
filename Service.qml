@@ -442,20 +442,20 @@ Item {
 
   function handleReleased(event) {
     root.sawKeyEvent = true
+    // Only releasing the mode modifier commits. Committing on any key release
+    // made Down/Tab close the switcher as soon as Qt reported no modifier
+    // (for example on a surface that just received keyboard focus), which
+    // turned navigation into an immediate selection. Quick taps are still
+    // handled by modCheck and Enter/Space/clicks commit explicitly.
     var isSuper = root.mode === "dropdown" && root.dropdownUsesSuper
     var target = root.mode === "dropdown"
       ? (isSuper ? [Qt.Key_Meta, Qt.Key_Super_L, Qt.Key_Super_R] : [Qt.Key_Control])
       : [Qt.Key_Alt]
-    for (var i = 0; i < target.length; i++) {
+    for (var i = 0; i < target.length; i++)
       if (event.key === target[i]) {
         root.commit()
         return
       }
-    }
-    var modifier = root.mode === "dropdown"
-      ? (isSuper ? Qt.MetaModifier : Qt.ControlModifier)
-      : Qt.AltModifier
-    if ((event.modifiers & modifier) === 0) root.commit()
   }
 
   // Icon lookup walks desktop entries and the icon theme; the overlay is
