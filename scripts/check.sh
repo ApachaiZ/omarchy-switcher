@@ -24,7 +24,7 @@ if [[ -z $QMLINT && -x /usr/lib/qt6/bin/qmllint ]]; then
   QMLINT=/usr/lib/qt6/bin/qmllint
 fi
 if [[ -n $QMLINT ]]; then
-  "$QMLINT" Service.qml SettingsPanel.qml OverlayWindow.qml HyprBinds.qml
+  "$QMLINT" ./*.qml
 fi
 
 echo "checks: ok"

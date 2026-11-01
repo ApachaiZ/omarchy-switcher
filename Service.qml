@@ -1,9 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import Quickshell.Wayland
 import Quickshell.Hyprland
-import qs.Commons
 import qs.Commons as Commons
 import "Model.js" as Model
 

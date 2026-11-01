@@ -2,7 +2,6 @@ import QtQuick
 import Quickshell
 import Quickshell.Wayland
 import qs.Commons
-import qs.Commons as Commons
 
 PanelWindow {
   id: window
@@ -325,7 +324,6 @@ PanelWindow {
         border.color: Util.alpha(service.accent, 0.4)
 
         ListView {
-          id: subList
           anchors.fill: parent
           anchors.margins: Style.space(6)
           model: service.selectedGroup ? service.selectedGroup.entries : []
@@ -344,7 +342,6 @@ PanelWindow {
               : "transparent"
 
             Text {
-              id: subTitle
               textFormat: Text.PlainText
               anchors.left: parent.left
               anchors.leftMargin: Style.space(8)
