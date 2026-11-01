@@ -44,9 +44,11 @@ Item {
   readonly property var dropdownPreset: Model.presetForKey(settings.dropdownShortcut)
   readonly property bool dropdownUsesSuper: dropdownPreset.key.indexOf("SUPER") === 0
   readonly property int dropdownModifier: dropdownUsesSuper ? Qt.MetaModifier : Qt.ControlModifier
+  readonly property string settingsHint: mode === "dropdown"
+    ? (dropdownUsesSuper ? "Super+S" : "Ctrl+S") : "Alt+S"
   readonly property string modeHint: mode === "dropdown"
-    ? dropdownPreset.label + " · Tab/Shift+Tab · Entrée valide · Échap annule"
-    : "Alt+Tab · " + dropdownPreset.label + " pour Dropdown · Tab/Shift+Tab · Entrée valide · Échap annule"
+    ? dropdownPreset.label + " · Tab/Shift+Tab · Entrée · Échap · " + settingsHint + " réglages"
+    : "Alt+Tab · " + dropdownPreset.label + " pour Dropdown · Tab/Shift+Tab · Entrée · Échap · " + settingsHint + " réglages"
 
   readonly property var targetScreen: {
     var monitor = Hyprland.focusedMonitor
@@ -258,6 +260,14 @@ Item {
       event.accepted = true
       return
     }
+    var settingsModifier = root.mode === "dropdown" ? root.dropdownModifier : Qt.AltModifier
+    if (event.key === Qt.Key_S && !event.isAutoRepeat &&
+        ((event.modifiers & settingsModifier) !== 0 ||
+         (event.modifiers & (Qt.AltModifier | Qt.ControlModifier | Qt.MetaModifier)) === 0)) {
+      root.openSettings()
+      event.accepted = true
+      return
+    }
     if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
       root.commit()
       event.accepted = true
@@ -378,7 +388,7 @@ Item {
         anchors.centerIn: parent
         width: Math.min(panelWindow.screen ? panelWindow.screen.width - 96 : 900,
           Math.max(560, cardRow.implicitWidth + Style.space(56)))
-        height: Style.space(300)
+        height: Math.max(Style.space(300), contentColumn.implicitHeight + Style.space(40))
         radius: Math.max(16, Style.cornerRadius)
         color: Qt.rgba(root.popupBackground.r, root.popupBackground.g,
           root.popupBackground.b, 0.98)
@@ -419,17 +429,22 @@ Item {
         }
 
         Column {
+          id: contentColumn
           anchors.left: parent.left
           anchors.right: parent.right
           anchors.top: parent.top
           anchors.margins: Style.space(20)
           spacing: Style.space(12)
 
-          Row {
+          Item {
             width: parent.width
+            height: Math.max(titleText.implicitHeight, modePill.height, settingsButton.height)
 
             Text {
+              id: titleText
               textFormat: Text.PlainText
+              anchors.left: parent.left
+              anchors.verticalCenter: parent.verticalCenter
               text: "SWITCHER"
               color: root.accent
               font.family: Style.font.family
@@ -438,27 +453,57 @@ Item {
               font.letterSpacing: 1.2
             }
 
-            Item { width: parent.width - modePill.width - 160; height: 1 }
+            Row {
+              anchors.right: parent.right
+              anchors.verticalCenter: parent.verticalCenter
+              spacing: 8
 
-            Rectangle {
-              id: modePill
-              width: modeText.implicitWidth + 18
-              height: 24
-              radius: 12
-              color: Util.alpha(root.accent, 0.12)
-              border.width: 1
-              border.color: Util.alpha(root.accent, 0.35)
+              Rectangle {
+                id: settingsButton
+                width: 24
+                height: 24
+                radius: 12
+                color: Util.alpha(root.accent, 0.12)
+                border.width: 1
+                border.color: Util.alpha(root.accent, 0.35)
 
-              Text {
-                id: modeText
-                textFormat: Text.PlainText
-                anchors.centerIn: parent
-                text: root.modeLabel
-                color: root.accent
-                font.family: Style.font.family
-                font.pixelSize: 10
-                font.bold: true
-                font.letterSpacing: 0.8
+                Text {
+                  textFormat: Text.PlainText
+                  anchors.centerIn: parent
+                  text: "⚙"
+                  color: root.accent
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.body
+                }
+
+                MouseArea {
+                  anchors.fill: parent
+                  acceptedButtons: Qt.LeftButton
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: root.openSettings()
+                }
+              }
+
+              Rectangle {
+                id: modePill
+                width: modeText.implicitWidth + 18
+                height: 24
+                radius: 12
+                color: Util.alpha(root.accent, 0.12)
+                border.width: 1
+                border.color: Util.alpha(root.accent, 0.35)
+
+                Text {
+                  id: modeText
+                  textFormat: Text.PlainText
+                  anchors.centerIn: parent
+                  text: root.modeLabel
+                  color: root.accent
+                  font.family: Style.font.family
+                  font.pixelSize: 10
+                  font.bold: true
+                  font.letterSpacing: 0.8
+                }
               }
             }
           }
@@ -468,8 +513,8 @@ Item {
             text: root.modeHint
             color: Util.alpha(root.popupText, 0.55)
             font.family: Style.font.family
-            font.pixelSize: 11
-            elide: Text.ElideRight
+            font.pixelSize: Style.font.caption
+            wrapMode: Text.WordWrap
             width: parent.width
           }
 

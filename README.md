@@ -3,6 +3,8 @@
 A keyboard-first window switcher for [Omarchy](https://omarchy.org), built to
 work directly with [Dropdown](https://github.com/ApachaiZ/omarchy-dropdown).
 
+![Omarchy Switcher — Your windows. One shortcut.](preview.png)
+
 - **Alt + Tab** cycles mapped Hyprland windows that Dropdown does **not** manage.
 - **Ctrl + Tab** cycles only windows managed by Dropdown.
 - A central overlay with a translucent, blurred backdrop.
@@ -10,6 +12,7 @@ work directly with [Dropdown](https://github.com/ApachaiZ/omarchy-dropdown).
 - The selected card zooms and takes the mode's accent colour.
 - **Alt-Tab** mode uses cyan; **Dropdown** mode uses violet, so the two
   contexts are immediately distinguishable.
+- **Settings**: `Super + Alt + S` anywhere, or `S` while the switcher is open.
 - No screen capture. Icons are local; titles are rendered as plain text.
 
 
@@ -75,8 +78,11 @@ service checks the live modifier state and commits the initial selection.
 
 ## Settings
 
-`Super + Alt + S` opens the Switcher settings overlay. Choose the Dropdown
-shortcut from the keyboard (`↑`/`↓`, `Enter`) or with the mouse:
+Open the settings with the **⚙** button in the overlay, with **Alt+S** in the
+all-windows mode, with **Ctrl+S** in Dropdown mode (or **Super+S** if you chose
+the Super+Tab preset), or with **Super + Alt + S** when the switcher is closed.
+Choose the Dropdown shortcut from the keyboard (`↑`/`↓`, `Enter`) or with the
+mouse:
 
 - `Ctrl + Tab` (default)
 - `Super + Tab`

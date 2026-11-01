@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "apach.switcher",
   "name": "Switcher",
-  "version": "0.1.5",
+  "version": "0.1.7",
   "author": "ApachaiZ",
   "license": "MIT",
   "description": "Keyboard-first Alt-Tab and Dropdown-only window switcher for Omarchy, with a blurred central overlay, icon cards and a configurable second shortcut.",
