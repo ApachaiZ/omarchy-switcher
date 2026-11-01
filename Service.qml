@@ -185,6 +185,17 @@ Item {
     printErrors: false
   }
 
+  // Theme switches can change the icon theme without restarting the shell.
+  FileView {
+    path: root.home + "/.config/omarchy/current/theme.name"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: {
+      root.clearIconCache()
+      reload()
+    }
+  }
+
   Process {
     id: clientsProc
     command: ["hyprctl", "clients", "-j"]
@@ -388,9 +399,15 @@ Item {
 
   // Icon lookup walks desktop entries and the icon theme; the overlay is
   // rebuilt on every open, so memoize by app id. Bounded to keep RAM flat in
-  // long sessions.
+  // long sessions, and cleared when the theme changes so a new icon theme is
+  // picked up without a shell restart.
   property var iconCache: ({})
   property var iconCacheOrder: []
+
+  function clearIconCache() {
+    root.iconCache = ({})
+    root.iconCacheOrder = []
+  }
 
   function iconFor(entry) {
     if (!entry) return ""
