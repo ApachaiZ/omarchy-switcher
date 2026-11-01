@@ -380,7 +380,7 @@ Item {
         height: Style.space(300)
         radius: Math.max(16, Style.cornerRadius)
         color: Qt.rgba(root.popupBackground.r, root.popupBackground.g,
-          root.popupBackground.b, 0.92)
+          root.popupBackground.b, 0.98)
         border.width: 1
         border.color: Util.alpha(root.accent, 0.55)
         opacity: 0
@@ -686,7 +686,7 @@ Item {
         radius: Math.max(16, Style.cornerRadius)
         opacity: 0
         color: Qt.rgba(root.popupBackground.r, root.popupBackground.g,
-          root.popupBackground.b, 0.94)
+          root.popupBackground.b, 0.98)
         border.width: 1
         border.color: Util.alpha(root.accent, 0.5)
         focus: true
