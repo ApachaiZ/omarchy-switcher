@@ -97,9 +97,10 @@ bindings, `~/.config/hypr/switcher.lua`.
 
 ### Static bindings (optional)
 
-If you want the shortcuts to live in Hyprland's config — for example so they
-survive a stopped `omarchy-shell` — install the plugin once, then generate the
-static file:
+**Optional.** The standard install above needs none of this: the service owns
+the shortcuts at runtime. Use this only if you want them to live in Hyprland's
+config, for example so they survive a stopped `omarchy-shell`. Install the
+plugin once, then generate the static file:
 
 ```bash
 install -Dm644 \
