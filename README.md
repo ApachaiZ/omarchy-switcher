@@ -5,8 +5,10 @@ work directly with [Dropdown](https://github.com/ApachaiZ/omarchy-dropdown).
 
 ![Omarchy Switcher — Your windows. One shortcut.](preview.png)
 
-- **Alt + Tab** cycles mapped Hyprland windows that Dropdown does **not** manage.
+- **Alt + Tab** (configurable) cycles mapped Hyprland windows that Dropdown
+  does **not** manage.
 - **Ctrl + Tab** cycles only windows managed by Dropdown.
+- Binds are registered at runtime; no files outside the plugin folder.
 - A central overlay with a translucent, blurred backdrop.
 - One icon card per window, with a centered stylized title above it.
 - The selected card zooms and takes the mode's accent colour.
@@ -47,6 +49,10 @@ The default bindings are:
 | `Ctrl + Tab` | cycle Dropdown windows |
 | `Ctrl + Shift + Tab` | cycle Dropdown windows backwards |
 
+The all-windows shortcut can also be set to Alt + backtick (reverse
+Alt + Shift + backtick) in Settings. `Super + Tab` is deliberately not offered:
+Omarchy uses it for workspace switching.
+
 ### Static bindings (optional)
 
 If you want the shortcuts to live in Hyprland's config — for example so they
@@ -81,14 +87,21 @@ backups) and goes back to runtime bindings.
 
 - Hyprland drops binds and layer rules registered with `hyprctl eval` on every
   config reload. The service re-applies them on Hyprland's `configreloaded`
-  event, so for a few milliseconds after a reload `Alt+Tab` belongs to
-  Omarchy's default binds again.
+  event, so for a few milliseconds after a reload the all-windows shortcut
+  belongs to Omarchy's default binds again.
+- After registering, the service compares `hyprctl binds -j` with the chords it
+  expects and retries once if a bind did not land. Registration errors are
+  reported in the settings panel and in `diagnose`.
+- Changes are coalesced and deduplicated: one `hyprctl eval` at a time, and no
+  process is spawned when the bind-relevant settings did not change.
 - If `omarchy-shell` is not running, the runtime binds do nothing until the
   next reload. The static file above keeps the binds, but their IPC calls still
   need the service.
 - Disabling the plugin unbinds its keys when the service is destroyed, so no
   dead shortcut is left behind. Hyprland's own defaults come back on the next
   reload (`hyprctl reload` or `omarchy restart shell`).
+- Conflicts are reported, not resolved silently: if another tool (for example
+  `vbrosseau.alttab`) owns one of the chords, the settings panel names it.
 
 ## Use
 
@@ -96,7 +109,7 @@ While the overlay is open:
 
 - `Tab` / `Shift+Tab` or `←` / `→` move the selection;
 - `Ctrl+Tab` switches the current overlay to Dropdown windows;
-- `Alt+Tab` switches it back to other windows;
+- the all-windows shortcut switches it back to other windows;
 - `Enter` or `Space` activates the selection;
 - `Escape` cancels;
 - releasing Alt (all mode) or Ctrl (Dropdown mode) activates the selection;
@@ -126,18 +139,21 @@ Quickshell and are validated before being stored. `Ctrl+Tab` is only bound
 when the **Dropdown plugin is enabled**; if Dropdown is absent or disabled,
 the shortcut is left to the rest of the desktop and the hint omits it.
 
-Choose the Dropdown shortcut from the keyboard (`↑`/`↓`, `Enter`) or with the
-mouse:
+Choose the all-windows shortcut and the Dropdown shortcut from the keyboard
+(`↑`/`↓`, `Enter`) or with the mouse:
 
-- `Ctrl + Tab` (default)
-- `Super + Tab`
-- `Ctrl + Space`
+- all windows: `Alt + Tab` (default) or Alt + backtick;
+- Dropdown: `Ctrl + Tab` (default), `Super + Tab`, or `Ctrl + Space`.
 
-The choice is written to `~/.config/omarchy/switcher.json` and applied
+Both choices are written to `~/.config/omarchy/switcher.json` and applied
 immediately: runtime bindings are re-registered in place, with no Hyprland
 reload. Static installs also regenerate `~/.config/hypr/switcher.lua` and
-reload Hyprland. The all-windows shortcut stays `Alt+Tab` so it cannot collide
-with the Dropdown shortcut.
+reload Hyprland. A shortcut cannot be used for both modes: choosing a
+colliding value moves the Dropdown mode back to `Ctrl + Tab`.
+
+The settings panel also reports the active binding mode (runtime or static
+file), any registration error, and shortcuts that another tool already owns
+on the same chords.
 
 ## Dropdown integration
 
@@ -176,9 +192,24 @@ enabling Switcher.
 - The state file is read locally and is never uploaded or logged.
 - The IPC `status` method exposes counts and the selected index, never window
   titles or app ids.
+- The IPC `diagnose` method returns binding health, mode and shortcut names
+  only. It never includes window titles, app ids, screen serials or the
+  contents of the settings file.
 - No history, screenshots or window contents are written to disk.
 - `tests/qml-security.test.mjs` enforces plain text on every `Text`, forbids
-  `ScreencopyView` and rejects shell command strings.
+  `ScreencopyView`, rejects shell command strings and checks that the generated
+  bind expression is built only from the fixed preset table.
+
+### Privacy and GDPR
+
+The plugin has no network code, no telemetry, no analytics and no remote
+endpoint. Everything it reads (window list, Dropdown state, settings, Hyprland
+binds) stays on the machine and is processed in memory. The only persistent
+data is `~/.config/omarchy/switcher.json` (shortcut and monitor choices), which
+contains no personal data and is never transmitted. Removing the plugin and
+that file removes everything the plugin wrote; the static file and its
+`require` line, if used, are removed by `scripts/static-binds.sh off`. See
+[PRIVACY.md](PRIVACY.md) for the short form.
 
 ## Performance
 
@@ -188,6 +219,10 @@ enabling Switcher.
   destroyed on close.
 - No screencopy and no thumbnail cache: only app icons at 96×96, decoded
   asynchronously and cached by Qt.
+- Icon lookups are memoized per app id and capped at 128 entries, so reopening
+  the overlay does not walk the desktop-entry database again.
+- Bind registrations are deduplicated by a settings fingerprint, and run one
+  at a time; no `hyprctl` process is spawned when nothing changed.
 - Animations are short opacity/scale transitions (110–140 ms) with no infinite
   animation.
 - The Dropdown state file is a small `FileView` watcher; it contains only app
@@ -207,11 +242,25 @@ Hyprland's blur must be enabled globally for the layer rule to take effect. If
 translucent card without backdrop blur. Enable it in your Hyprland decoration
 settings if you want the full glass effect.
 
+## Diagnostics
+
+The plugin exposes two local IPC methods:
+
+```bash
+omarchy-shell -q apach.switcher status    # open state, counts, bind health
+omarchy-shell -q apach.switcher diagnose  # mode, registration, conflicts
+```
+
+Neither returns window titles or app ids. Paste the output into a bug report
+instead of screenshots of your windows.
+
 ## Development
 
 ```bash
 node --test tests/*.test.mjs
+node --check Model.js
 omarchy plugin validate .
+/usr/lib/qt6/bin/qmllint Service.qml OverlayWindow.qml HyprBinds.qml
 
 # Optional static bindings, from a checkout
 scripts/static-binds.sh on
