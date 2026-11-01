@@ -4,6 +4,7 @@ import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Hyprland
 import qs.Commons
+import qs.Commons as Commons
 import "Model.js" as Model
 
 Item {
@@ -27,7 +28,17 @@ Item {
   readonly property string settingsPath: home + "/.config/omarchy/switcher.json"
   readonly property string bindsPath: home + "/.config/hypr/switcher.lua"
   readonly property string dropdownStatePath: home + "/.local/state/omarchy/dropdown-state.json"
-  readonly property color accent: mode === "dropdown" ? "#b784ff" : "#2bd9e8"
+  readonly property color themeAccent: Commons.Color.accent
+  readonly property color popupText: Commons.Color.popups.text
+  readonly property color popupBackground: Commons.Color.popups.background
+  readonly property color popupBorder: Commons.Color.popups.border
+  // Keep the Dropdown mode clearly distinct without leaving the active theme:
+  // rotate the theme accent's hue toward violet and reuse its saturation.
+  readonly property color accent: mode === "dropdown"
+    ? Qt.hsla((themeAccent.hslHue + 0.25) % 1.0,
+        Math.max(0.5, themeAccent.hslSaturation),
+        Math.min(0.72, themeAccent.hslLightness + 0.06), 1.0)
+    : themeAccent
   readonly property string modeLabel: mode === "dropdown" ? "FENÊTRES DROPDOWN" : "TOUTES LES FENÊTRES"
   readonly property var presets: Model.shortcutPresets()
   readonly property var dropdownPreset: Model.presetForKey(settings.dropdownShortcut)
@@ -364,13 +375,14 @@ Item {
       Rectangle {
         id: panel
         anchors.centerIn: parent
-        width: Math.min(panelWindow.screen ? panelWindow.screen.width - 96 : 1000,
-          Math.max(760, cardRow.implicitWidth + 80))
-        height: 406
-        radius: 24
-        color: Qt.rgba(0.015, 0.025, 0.04, 0.66)
+        width: Math.min(panelWindow.screen ? panelWindow.screen.width - 96 : 900,
+          Math.max(560, cardRow.implicitWidth + Style.space(56)))
+        height: Style.space(300)
+        radius: Math.max(16, Style.cornerRadius)
+        color: Qt.rgba(root.popupBackground.r, root.popupBackground.g,
+          root.popupBackground.b, 0.92)
         border.width: 1
-        border.color: Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.55)
+        border.color: Util.alpha(root.accent, 0.55)
         opacity: 0
         focus: true
         Keys.priority: Keys.BeforeItem
@@ -402,15 +414,15 @@ Item {
           radius: parent.radius
           color: "transparent"
           border.width: 1
-          border.color: Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.12)
+          border.color: Util.alpha(root.accent, 0.12)
         }
 
         Column {
           anchors.left: parent.left
           anchors.right: parent.right
           anchors.top: parent.top
-          anchors.margins: 24
-          spacing: 18
+          anchors.margins: Style.space(20)
+          spacing: Style.space(12)
 
           Row {
             width: parent.width
@@ -420,9 +432,9 @@ Item {
               text: "SWITCHER"
               color: root.accent
               font.family: Style.font.family
-              font.pixelSize: Style.font.title
+              font.pixelSize: Style.font.subtitle
               font.bold: true
-              font.letterSpacing: 1.5
+              font.letterSpacing: 1.2
             }
 
             Item { width: parent.width - modePill.width - 160; height: 1 }
@@ -432,9 +444,9 @@ Item {
               width: modeText.implicitWidth + 18
               height: 24
               radius: 12
-              color: Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.12)
+              color: Util.alpha(root.accent, 0.12)
               border.width: 1
-              border.color: Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.35)
+              border.color: Util.alpha(root.accent, 0.35)
 
               Text {
                 id: modeText
@@ -453,7 +465,7 @@ Item {
           Text {
             textFormat: Text.PlainText
             text: root.modeHint
-            color: Qt.rgba(1, 1, 1, 0.55)
+            color: Util.alpha(root.popupText, 0.55)
             font.family: Style.font.family
             font.pixelSize: 11
             elide: Text.ElideRight
@@ -487,7 +499,7 @@ Item {
 
             Row {
               id: cardRow
-              spacing: 16
+              spacing: Style.space(12)
 
               Repeater {
                 model: root.entries
@@ -499,19 +511,19 @@ Item {
                   readonly property var entry: modelData
                   readonly property bool isSelected: root.selected === index
 
-                  width: 166
-                  height: 238
+                  width: 136
+                  height: 166
 
                   onIsSelectedChanged: if (isSelected) strip.reveal(cardItem.x, cardItem.width)
 
                   Text {
                     textFormat: Text.PlainText
                     width: parent.width
-                    height: 42
+                    height: 36
                     text: cardItem.entry.title
-                    color: cardItem.isSelected ? root.accent : Qt.rgba(1, 1, 1, 0.78)
+                    color: cardItem.isSelected ? root.accent : Util.alpha(root.popupText, 0.78)
                     font.family: Style.font.family
-                    font.pixelSize: 13
+                    font.pixelSize: Style.font.body
                     font.bold: cardItem.isSelected
                     font.letterSpacing: 0.4
                     horizontalAlignment: Text.AlignHCenter
@@ -523,18 +535,18 @@ Item {
 
                   Rectangle {
                     id: card
-                    y: 50
+                    y: 40
                     anchors.horizontalCenter: parent.horizontalCenter
-                    width: 146
-                    height: 146
-                    radius: 18
+                    width: 112
+                    height: 112
+                    radius: Math.max(12, Style.cornerRadius)
                     color: cardItem.isSelected
-                      ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.16)
-                      : Qt.rgba(1, 1, 1, 0.035)
+                      ? Util.alpha(root.accent, 0.16)
+                      : Util.alpha(root.popupText, 0.04)
                     border.width: cardItem.isSelected ? 2 : 1
                     border.color: cardItem.isSelected
                       ? root.accent
-                      : Qt.rgba(1, 1, 1, 0.12)
+                      : Util.alpha(root.popupText, 0.12)
                     scale: cardItem.isSelected ? 1.08 : 1.0
                     z: cardItem.isSelected ? 2 : 0
 
@@ -552,8 +564,8 @@ Item {
                       id: icon
                       anchors.centerIn: parent
                       anchors.verticalCenterOffset: -8
-                      width: 80
-                      height: 80
+                      width: 60
+                      height: 60
                       source: root.iconFor(cardItem.entry)
                       sourceSize.width: 96
                       sourceSize.height: 96
@@ -565,11 +577,11 @@ Item {
 
                     Rectangle {
                       anchors.centerIn: icon
-                      width: 66
-                      height: 66
-                      radius: 18
+                      width: 52
+                      height: 52
+                      radius: 14
                       visible: !icon.visible
-                      color: Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.18)
+                      color: Util.alpha(root.accent, 0.18)
 
                       Text {
                         textFormat: Text.PlainText
@@ -589,9 +601,9 @@ Item {
                       anchors.bottomMargin: 9
                       width: parent.width - 14
                       text: root.appLabel(cardItem.entry)
-                      color: cardItem.isSelected ? root.accent : Qt.rgba(1, 1, 1, 0.48)
+                      color: cardItem.isSelected ? root.accent : Util.alpha(root.popupText, 0.48)
                       font.family: Style.font.family
-                      font.pixelSize: 10
+                      font.pixelSize: Style.font.caption
                       horizontalAlignment: Text.AlignHCenter
                       elide: Text.ElideRight
                     }
@@ -609,12 +621,12 @@ Item {
 
                   Rectangle {
                     visible: cardItem.isSelected
-                    width: 30
+                    width: 24
                     height: 2
                     radius: 1
                     color: root.accent
                     anchors.horizontalCenter: parent.horizontalCenter
-                    y: 46
+                    y: 36
                   }
                 }
               }
@@ -631,7 +643,7 @@ Item {
             text: root.mode === "dropdown"
               ? "Aucune fenêtre Dropdown ouverte"
               : "Aucune fenêtre ouverte"
-            color: Qt.rgba(1, 1, 1, 0.55)
+            color: Util.alpha(root.popupText, 0.55)
             font.family: Style.font.family
             font.pixelSize: Style.font.body
           }
@@ -669,13 +681,14 @@ Item {
       Rectangle {
         id: settingsPanel
         anchors.centerIn: parent
-        width: 560
-        height: 390
-        radius: 24
+        width: Style.space(460)
+        height: Style.space(320)
+        radius: Math.max(16, Style.cornerRadius)
         opacity: 0
-        color: Qt.rgba(0.015, 0.025, 0.04, 0.8)
+        color: Qt.rgba(root.popupBackground.r, root.popupBackground.g,
+          root.popupBackground.b, 0.94)
         border.width: 1
-        border.color: Qt.rgba(0.18, 0.85, 0.91, 0.5)
+        border.color: Util.alpha(root.accent, 0.5)
         focus: true
         Keys.priority: Keys.BeforeItem
         Keys.onPressed: function(event) {
@@ -716,15 +729,15 @@ Item {
 
         Column {
           anchors.fill: parent
-          anchors.margins: 24
-          spacing: 12
+          anchors.margins: Style.space(20)
+          spacing: Style.space(10)
 
           Text {
             textFormat: Text.PlainText
             text: "SWITCHER — RÉGLAGES"
-            color: "#2bd9e8"
+            color: root.accent
             font.family: Style.font.family
-            font.pixelSize: Style.font.title
+            font.pixelSize: Style.font.subtitle
             font.bold: true
             font.letterSpacing: 1
           }
@@ -732,7 +745,7 @@ Item {
           Text {
             textFormat: Text.PlainText
             text: "Toutes les fenêtres : Alt + Tab. Choisis le raccourci Dropdown :"
-            color: Qt.rgba(1, 1, 1, 0.6)
+            color: Util.alpha(root.popupText, 0.6)
             font.family: Style.font.family
             font.pixelSize: 11
           }
@@ -744,13 +757,13 @@ Item {
               required property var modelData
               required property int index
               width: parent.width
-              height: 42
-              radius: 10
+              height: Style.space(38)
+              radius: Math.max(8, Style.cornerRadius - 8)
               color: root.selected === index
-                ? Qt.rgba(0.18, 0.85, 0.91, 0.16)
-                : Qt.rgba(1, 1, 1, 0.035)
+                ? Util.alpha(root.accent, 0.16)
+                : Util.alpha(root.popupText, 0.04)
               border.width: root.selected === index ? 1 : 0
-              border.color: "#2bd9e8"
+              border.color: root.accent
 
               Text {
                 textFormat: Text.PlainText
@@ -758,7 +771,7 @@ Item {
                 anchors.leftMargin: 14
                 anchors.verticalCenter: parent.verticalCenter
                 text: modelData.label
-                color: root.selected === index ? "#2bd9e8" : Qt.rgba(1, 1, 1, 0.75)
+                color: root.selected === index ? root.accent : Util.alpha(root.popupText, 0.75)
                 font.family: Style.font.family
                 font.pixelSize: 12
                 font.bold: root.selected === index
@@ -771,9 +784,9 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 visible: root.settings.dropdownShortcut === modelData.key
                 text: "ACTUEL"
-                color: "#2bd9e8"
+                color: root.accent
                 font.family: Style.font.family
-                font.pixelSize: 9
+                font.pixelSize: Style.font.caption
                 font.bold: true
                 font.letterSpacing: 0.8
               }
@@ -789,9 +802,9 @@ Item {
           Text {
             textFormat: Text.PlainText
             text: "Échap ferme · Entrée applique"
-            color: Qt.rgba(1, 1, 1, 0.4)
+            color: Util.alpha(root.popupText, 0.4)
             font.family: Style.font.family
-            font.pixelSize: 10
+            font.pixelSize: Style.font.caption
           }
         }
       }
