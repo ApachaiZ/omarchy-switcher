@@ -19,10 +19,7 @@ jobs:
         run: node --test tests/*.test.mjs
 
       - name: Shell syntax
-        run: bash -n scripts/*.sh tests/*.sh
-
-      - name: Static bindings helper
-        run: tests/static-binds.test.sh
+        run: bash -n scripts/*.sh
 
       - name: JS syntax
         run: node --check Model.js

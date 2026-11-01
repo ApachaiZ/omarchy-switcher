@@ -32,7 +32,7 @@ this plugin.
 The plugin does not collect, transmit or sell personal data, and there is no
 remote processing. The only local configuration file can be deleted at any
 time; removing the plugin and that file removes everything it wrote. If you
-also used the optional static bindings, `scripts/static-binds.sh off` removes
-the generated file and its `require` line.
+used 0.1.x static bindings, remove `~/.config/hypr/switcher.lua` and its
+`require` line too.
 
 Questions or corrections: open an issue on the project repository.

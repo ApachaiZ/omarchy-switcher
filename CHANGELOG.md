@@ -18,9 +18,6 @@
   file), registration errors and conflicts.
 - `diagnose` IPC method for local support reports, without window titles or app
   ids.
-- `scripts/static-binds.sh on|off|status` for the optional static bindings
-  file, with backups. `on` generates the file from the current shortcut
-  settings when Node is available.
 - `PRIVACY.md` and a GDPR section in the README.
 
 ### Changed
@@ -38,6 +35,10 @@
 
 - `install.sh` and `uninstall.sh` at the repository root. A plugin must not
   suggest an install step that `omarchy plugin add` cannot perform.
+- The optional static bindings helper and the shipped `hypr/switcher.lua`
+  template. A 0.1.x static file is still detected and kept in sync for
+  compatibility, but the README now documents only the standard install path
+  and how to remove the old file.
 - The `safeScreenName` and internal `bindEntries` exports from `Model.js`.
 
 ### Fixed
@@ -52,9 +53,6 @@
 - Navigation keys no longer validate the current card on release. Only the
   modifier key, Enter/Space, a click or the quick-tap timer commits; Down and
   Tab now navigate without closing the switcher.
-- The static bindings helper generates and validates the new file before
-  touching the destination, keeps a backup, and preserves dotfiles symlinks.
-  A failing generator leaves the existing `switcher.lua` untouched.
 - Runtime registration no longer stays pending forever: `StdioCollector.text`
   is read as a property (it is not a method), so bind status, verification and
   the one-step retry actually run.

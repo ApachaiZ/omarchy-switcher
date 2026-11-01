@@ -55,13 +55,12 @@ your choices in `~/.config/omarchy/switcher.json`.
 - Omarchy 4 (the Quickshell shell) with Hyprland's Lua config: runtime bindings
   use `hyprctl eval`.
 - Dropdown is optional; only the Dropdown mode needs it.
-- No Node, build step or extra package is needed for a normal install. Node is
-  only used by the optional `scripts/static-binds.sh` generator.
+- No Node, build step or extra package is needed. Node is only used by the
+  development test suite.
 
-If you are migrating from 0.1.x, remove the old
-`~/.config/hypr/switcher.lua` and its `require` line
-(`scripts/static-binds.sh off`) so the service owns the shortcuts; otherwise
-the plugin keeps using the static file.
+If you are migrating from 0.1.x, delete `~/.config/hypr/switcher.lua` and the
+`require("hypr.switcher")` line from `hyprland.lua`, then reload Hyprland.
+Until you do, the service keeps honouring that file for compatibility.
 
 The default bindings are:
 
@@ -92,42 +91,8 @@ This repository is a standard Omarchy shell plugin:
 
 Like every Omarchy plugin, it runs as unsandboxed code inside `omarchy-shell`.
 Only install it if you trust the repository. The plugin writes only its own
-settings file (`~/.config/omarchy/switcher.json`) and, if you opt into static
-bindings, `~/.config/hypr/switcher.lua`.
-
-### Static bindings (optional)
-
-**Optional.** The standard install above needs none of this: the service owns
-the shortcuts at runtime. Use this only if you want them to live in Hyprland's
-config, for example so they survive a stopped `omarchy-shell`. Install the
-plugin once, then generate the static file:
-
-```bash
-install -Dm644 \
-  ~/.config/omarchy/plugins/apach.switcher/hypr/switcher.lua \
-  ~/.config/hypr/switcher.lua
-```
-
-Add this line to `~/.config/hypr/hyprland.lua` (from a checkout,
-`scripts/static-binds.sh on` does both steps; when installed, run
-`~/.config/omarchy/plugins/apach.switcher/scripts/static-binds.sh on`):
-
-```lua
-require("hypr.switcher")
-```
-
-Then reload:
-
-```bash
-hyprctl reload
-```
-
-When Node is available and `~/.config/omarchy/switcher.json` exists, the
-helper generates the file from your current shortcuts; otherwise it copies the
-shipped default. When `~/.config/hypr/switcher.lua` exists, the service detects
-it and leaves the keyboard integration entirely to that file. From a checkout,
-`scripts/static-binds.sh off` removes that file and its `require` line (with
-backups) and goes back to runtime bindings.
+settings file (`~/.config/omarchy/switcher.json`). A 0.1.x static file is still
+read for compatibility until you remove it.
 
 ### How runtime bindings behave
 
@@ -141,8 +106,8 @@ backups) and goes back to runtime bindings.
 - Changes are coalesced and deduplicated: one `hyprctl eval` at a time, and no
   process is spawned when the bind-relevant settings did not change.
 - If `omarchy-shell` is not running, the runtime binds do nothing until the
-  next reload. The static file above keeps the binds, but their IPC calls still
-  need the service.
+  next reload. A 0.1.x static file, if still present, keeps the binds, but
+  their IPC calls still need the service.
 - Disabling the plugin unbinds its keys when the service is destroyed, so no
   dead shortcut is left behind. Hyprland's own defaults come back on the next
   reload (`hyprctl reload` or `omarchy restart shell`).
@@ -157,11 +122,13 @@ omarchy restart shell   # keepLoaded services keep their old code until a restar
 ```
 
 The service is declared `keepLoaded: true`, so file updates alone do not
-replace the running instance. Before removing the plugin, drop the optional
-static bindings if you used them:
+replace the running instance. When migrating from 0.1.x, remove the old static
+file and its `require` line first, then reload Hyprland and remove the plugin:
 
 ```bash
-~/.config/omarchy/plugins/apach.switcher/scripts/static-binds.sh off
+rm -f ~/.config/hypr/switcher.lua
+# remove require("hypr.switcher") from ~/.config/hypr/hyprland.lua
+hyprctl reload
 omarchy plugin remove apach.switcher --yes
 ```
 
@@ -215,8 +182,8 @@ Choose the all-windows shortcut and the Dropdown shortcut from the keyboard
 
 Both choices are written to `~/.config/omarchy/switcher.json` and applied
 immediately: runtime bindings are re-registered in place, with no Hyprland
-reload. Static installs also regenerate `~/.config/hypr/switcher.lua` and
-reload Hyprland. A shortcut cannot be used for both modes: choosing a
+reload. If a leftover 0.1.x static file is present, it is regenerated and
+Hyprland reloaded. A shortcut cannot be used for both modes: choosing a
 colliding value moves the Dropdown mode back to `Ctrl + Tab`.
 
 The settings panel also reports the active binding mode (runtime or static
@@ -275,8 +242,8 @@ endpoint. Everything it reads (window list, Dropdown state, settings, Hyprland
 binds) stays on the machine and is processed in memory. The only persistent
 data is `~/.config/omarchy/switcher.json` (shortcut and monitor choices), which
 contains no personal data and is never transmitted. Removing the plugin and
-that file removes everything the plugin wrote; the static file and its
-`require` line, if used, are removed by `scripts/static-binds.sh off`. See
+that file removes everything the plugin wrote; if you used 0.1.x static
+bindings, remove the old file and its `require` line too. See
 [PRIVACY.md](PRIVACY.md) for the short form.
 
 ## Performance
@@ -303,7 +270,8 @@ that file removes everything the plugin wrote; the static file and its
 ## Backdrop blur
 
 The overlay uses a translucent dark panel and this layer rule, registered by
-the service at runtime (or read from `hypr/switcher.lua` in static mode):
+the service at runtime (a leftover 0.1.x static file is still honoured until
+it is removed):
 
 ```lua
 hl.layer_rule({ match = { namespace = "apach-switcher" }, blur = true, ignore_alpha = 0.15, no_anim = true })
@@ -335,16 +303,9 @@ report instead of screenshots of your windows.
 scripts/check.sh
 ```
 
-It runs the Node tests, the hermetic `scripts/static-binds.sh` test, `node
---check`, shell syntax checks, `omarchy plugin validate` when Omarchy is
-available, and `qmllint` on every QML file when Qt's tooling is installed.
-
-```bash
-# Optional static bindings, from a checkout
-scripts/static-binds.sh on
-scripts/static-binds.sh off
-scripts/static-binds.sh status
-```
+It runs the Node tests, `node --check`, shell syntax checks,
+`omarchy plugin validate` when Omarchy is available, and `qmllint` on every QML
+file when Qt's tooling is installed.
 
 ## License
 

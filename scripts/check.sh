@@ -12,8 +12,7 @@ command -v node >/dev/null 2>&1 || {
 
 node --test tests/*.test.mjs
 node --check Model.js
-bash -n scripts/*.sh tests/*.sh
-tests/static-binds.test.sh
+bash -n scripts/*.sh
 
 if command -v omarchy >/dev/null 2>&1; then
   omarchy plugin validate .
