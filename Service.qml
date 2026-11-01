@@ -39,7 +39,7 @@ Item {
         Math.max(0.5, themeAccent.hslSaturation),
         Math.min(0.72, themeAccent.hslLightness + 0.06), 1.0)
     : themeAccent
-  readonly property string modeLabel: mode === "dropdown" ? "FENÊTRES DROPDOWN" : "TOUTES LES FENÊTRES"
+  readonly property string modeLabel: mode === "dropdown" ? "FENÊTRES DROPDOWN" : "AUTRES FENÊTRES"
   readonly property var presets: Model.shortcutPresets()
   readonly property var dropdownPreset: Model.presetForKey(settings.dropdownShortcut)
   readonly property bool dropdownUsesSuper: dropdownPreset.key.indexOf("SUPER") === 0

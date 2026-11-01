@@ -3,7 +3,7 @@
 A keyboard-first window switcher for [Omarchy](https://omarchy.org), built to
 work directly with [Dropdown](https://github.com/ApachaiZ/omarchy-dropdown).
 
-- **Alt + Tab** cycles every mapped Hyprland window.
+- **Alt + Tab** cycles mapped Hyprland windows that Dropdown does **not** manage.
 - **Ctrl + Tab** cycles only windows managed by Dropdown.
 - A central overlay with a translucent, blurred backdrop.
 - One icon card per window, with a centered stylized title above it.
@@ -12,13 +12,12 @@ work directly with [Dropdown](https://github.com/ApachaiZ/omarchy-dropdown).
   contexts are immediately distinguishable.
 - No screen capture. Icons are local; titles are rendered as plain text.
 
-![Switcher — all windows](docs/screenshots/switcher-all.png)
 
 ## Screenshots
 
-| All windows | Dropdown windows |
+| Other windows | Dropdown windows |
 | --- | --- |
-| ![All windows](docs/screenshots/switcher-all.png) | ![Dropdown windows](docs/screenshots/switcher-dropdown.png) |
+| ![Other windows](docs/screenshots/switcher-all.png) | ![Dropdown windows](docs/screenshots/switcher-dropdown.png) |
 
 ![Settings](docs/screenshots/switcher-settings.png)
 
@@ -53,8 +52,8 @@ The default bindings are:
 
 | Shortcut | Action |
 | --- | --- |
-| `Alt + Tab` | cycle all windows |
-| `Alt + Shift + Tab` | cycle all windows backwards |
+| `Alt + Tab` | cycle other windows |
+| `Alt + Shift + Tab` | cycle other windows backwards |
 | `Ctrl + Tab` | cycle Dropdown windows |
 | `Ctrl + Shift + Tab` | cycle Dropdown windows backwards |
 | `Super + Alt + S` | open Switcher settings |
@@ -65,7 +64,7 @@ While the overlay is open:
 
 - `Tab` / `Shift+Tab` or `←` / `→` move the selection;
 - `Ctrl+Tab` switches the current overlay to Dropdown windows;
-- `Alt+Tab` switches it back to all windows;
+- `Alt+Tab` switches it back to other windows;
 - `Enter` or `Space` activates the selection;
 - `Escape` cancels;
 - releasing Alt (all mode) or Ctrl (Dropdown mode) activates the selection;

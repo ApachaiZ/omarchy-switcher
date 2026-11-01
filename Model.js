@@ -75,6 +75,9 @@ function parseClients(raw, dropdownWindows, mode) {
       if (cls === "apach.switcher") continue
       var title = String(client.title || "") || cls || "Window"
       var dropdown = dropdownWindows[address.toLowerCase()] || null
+      // The two modes are disjoint: all windows means windows that Dropdown
+      // does not manage, and dropdown means only Dropdown windows.
+      if (mode === "all" && dropdown) continue
       if (mode === "dropdown" && !dropdown) continue
       var workspace = client.workspace && typeof client.workspace === "object"
         ? String(client.workspace.name || "") : ""
