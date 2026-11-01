@@ -14,6 +14,14 @@ HYPRLAND="$HYPR_DIR/hyprland.lua"
 SETTINGS="$CONFIG_HOME/omarchy/switcher.json"
 REQUIRE='require("hypr.switcher")'
 STAMP="$(date +%Y%m%d%H%M%S)"
+TMP_BINDS=""
+TMP_HYPR=""
+
+cleanup() {
+  [[ -z $TMP_BINDS ]] || rm -f -- "$TMP_BINDS"
+  [[ -z $TMP_HYPR ]] || rm -f -- "$TMP_HYPR"
+}
+trap cleanup EXIT
 
 # Prefer a file generated from the user's current shortcuts; fall back to the
 # shipped template when Node or the settings file is unavailable.
@@ -52,12 +60,36 @@ case "${1:-}" in
 on)
   require_hyprland
   mkdir -p "$HYPR_DIR"
-  generate_binds >"$BINDS"
+
+  # Generate and validate before touching the destination: a failing generator
+  # must never truncate an existing switcher.lua. The in-place copy preserves
+  # the inode (and a dotfiles symlink) so the running service's watcher fires.
+  if [[ -f $BINDS ]]; then
+    cp -- "$BINDS" "$BINDS.bak.$STAMP"
+    echo "Backup: $BINDS.bak.$STAMP"
+  fi
+  TMP_BINDS="$(mktemp "$HYPR_DIR/.switcher.XXXXXX")"
+  if ! generate_binds >"$TMP_BINDS"; then
+    echo "static-binds.sh: could not generate $BINDS; existing file kept" >&2
+    exit 1
+  fi
+  if [[ ! -s $TMP_BINDS ]] || ! grep -qF 'hl.layer_rule' "$TMP_BINDS"; then
+    echo "static-binds.sh: generated bindings look invalid; existing file kept" >&2
+    exit 1
+  fi
+  cat -- "$TMP_BINDS" >"$BINDS"
+  rm -f -- "$TMP_BINDS"
+  TMP_BINDS=""
   echo "Wrote $BINDS"
 
   if [[ -f $HYPRLAND ]] && ! grep -qF "$REQUIRE" "$HYPRLAND"; then
-    cp "$HYPRLAND" "$HYPRLAND.bak.$STAMP"
-    printf '\n%s\n' "$REQUIRE" >> "$HYPRLAND"
+    cp -- "$HYPRLAND" "$HYPRLAND.bak.$STAMP"
+    TMP_HYPR="$(mktemp "$HYPR_DIR/.hyprland.XXXXXX")"
+    cat -- "$HYPRLAND" >"$TMP_HYPR"
+    printf '\n%s\n' "$REQUIRE" >>"$TMP_HYPR"
+    cat -- "$TMP_HYPR" >"$HYPRLAND"
+    rm -f -- "$TMP_HYPR"
+    TMP_HYPR=""
     echo "Added $REQUIRE to $HYPRLAND"
     echo "Backup: $HYPRLAND.bak.$STAMP"
   elif [[ ! -f $HYPRLAND ]]; then
@@ -71,14 +103,15 @@ on)
 off)
   require_hyprland
   if [[ -f $HYPRLAND ]] && grep -qF "$REQUIRE" "$HYPRLAND"; then
-    cp "$HYPRLAND" "$HYPRLAND.bak.$STAMP"
+    cp -- "$HYPRLAND" "$HYPRLAND.bak.$STAMP"
     # Keep the original inode and permissions: writing through cat back into
     # the file avoids `sed -i` replacing it and avoids regex metacharacters in
     # the require line.
-    tmp="$(mktemp)"
-    grep -vF "$REQUIRE" "$HYPRLAND" >"$tmp" || true
-    cat "$tmp" >"$HYPRLAND"
-    rm -f "$tmp"
+    TMP_HYPR="$(mktemp "$HYPR_DIR/.hyprland.XXXXXX")"
+    grep -vF "$REQUIRE" "$HYPRLAND" >"$TMP_HYPR" || true
+    cat -- "$TMP_HYPR" >"$HYPRLAND"
+    rm -f -- "$TMP_HYPR"
+    TMP_HYPR=""
     echo "Removed $REQUIRE from $HYPRLAND"
     echo "Backup: $HYPRLAND.bak.$STAMP"
   fi

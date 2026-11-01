@@ -52,6 +52,9 @@
 - Navigation keys no longer validate the current card on release. Only the
   modifier key, Enter/Space, a click or the quick-tap timer commits; Down and
   Tab now navigate without closing the switcher.
+- The static bindings helper generates and validates the new file before
+  touching the destination, keeps a backup, and preserves dotfiles symlinks.
+  A failing generator leaves the existing `switcher.lua` untouched.
 - Runtime registration no longer stays pending forever: `StdioCollector.text`
   is read as a property (it is not a method), so bind status, verification and
   the one-step retry actually run.
