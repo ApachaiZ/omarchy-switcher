@@ -89,8 +89,9 @@ Item {
     return Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
   }
 
-  // The focused monitor is always part of the list, so mirroring a secondary
-  // screen can never leave the overlay invisible on the active one.
+  // "Active screen only" renders on the focused monitor; otherwise only the
+  // selected screens, with the focused one as a fallback when the selection is
+  // not connected.
   readonly property var displayScreens: Model.displayScreensFor(settings, screenNames, activeScreenName)
 
   readonly property string focusScreenName: {

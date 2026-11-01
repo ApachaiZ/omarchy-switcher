@@ -178,26 +178,24 @@ function safeScreenName(value) {
   return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(text) ? text : ""
 }
 
-// Screens the overlay is rendered on. The focused monitor is always included:
-// a configuration that mirrors selected secondary screens must never make the
-// overlay invisible from the screen the user is looking at.
+// Screens the overlay is rendered on. "Active screen only" means exactly the
+// focused monitor; when it is off, only the selected screens are rendered.
+// The focused monitor is a fallback only when no selected screen is currently
+// connected, so a stale selection cannot leave the switcher with no surface.
 function displayScreensFor(settings, screenNames, activeName) {
   var value = settings || defaultSettings()
   var available = Array.isArray(screenNames) ? screenNames : []
   var active = String(activeName || "")
-  var out = []
 
-  if (value.followActive) {
-    if (active) out.push(active)
-    return out
-  }
+  if (value.followActive) return active ? [active] : []
 
   var wanted = Array.isArray(value.screens) ? value.screens : []
+  var out = []
   for (var i = 0; i < available.length; i++) {
     var name = String(available[i] || "")
     if (name && wanted.indexOf(name) !== -1 && out.indexOf(name) === -1) out.push(name)
   }
-  if (active && out.indexOf(active) === -1) out.push(active)
+  if (out.length === 0 && active) out.push(active)
   return out
 }
 

@@ -39,8 +39,10 @@
 
 ### Fixed
 
-- The overlay is always rendered on the focused monitor. Mirroring only a
-  secondary screen no longer makes it invisible from the screen in use.
+- The "Active screen only" toggle is honoured: with it off, the overlay is
+  rendered only on the selected screens, even when the focused monitor is not
+  part of the selection. The focused monitor is a fallback only when none of
+  the selected screens is connected.
 - Changing the Dropdown shortcut no longer leaves the previous chord bound
   until a reload.
 - Disabling the plugin no longer leaves dead shortcut binds behind.

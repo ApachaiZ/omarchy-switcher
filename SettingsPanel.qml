@@ -243,7 +243,7 @@ PanelWindow {
         textFormat: Text.PlainText
         width: parent.width
         horizontalAlignment: Text.AlignHCenter
-        text: "The focused screen is always included."
+        text: "ON: follow the focused screen · OFF: selected screens only"
         color: Util.alpha(service.popupText, 0.5)
         font.family: Style.font.family
         font.pixelSize: Style.font.caption
