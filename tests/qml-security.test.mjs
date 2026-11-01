@@ -89,6 +89,13 @@ test("the bindings engine owns its shortcuts with a static-file fallback", () =>
   assert.match(source, /hyprUnbindEval/)
 })
 
+test("IPC reports never expose window titles or app ids", () => {
+  const source = readFileSync("Service.qml", "utf8")
+  const ipc = source.slice(source.indexOf("IpcHandler"))
+  assert.notEqual(ipc, "")
+  assert.doesNotMatch(ipc, /\.title\b|appId|\.cls\b/)
+})
+
 test("no remote URL is embedded in the service", () => {
   for (const file of files) {
     assert.equal(/https?:\/\//.test(readFileSync(file, "utf8")), false, file)
