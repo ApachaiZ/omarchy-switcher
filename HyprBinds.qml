@@ -182,6 +182,17 @@ Item {
     function onRawEvent(event) {
       if (!event || String(event.name) !== "configreloaded") return
       if (root.legacy) return
+      // Coalesce bursts: a theme apply or a script can reload the config more
+      // than once in a row.
+      reloadDebounce.restart()
+    }
+  }
+
+  Timer {
+    id: reloadDebounce
+    interval: 150
+    repeat: false
+    onTriggered: {
       root.attempts = 0
       root.apply({ reset: true, verify: true, retry: true })
       root.refreshConflicts()
