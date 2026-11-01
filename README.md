@@ -17,8 +17,9 @@ work directly with [Dropdown](https://github.com/ApachaiZ/omarchy-dropdown).
   window lives (`HDMI-A-1 · 3`). Parked Dropdown windows are labelled
   `Dropdown`.
 - The selected card zooms and takes the mode's accent colour.
-- **Alt-Tab** mode uses cyan; **Dropdown** mode uses violet, so the two
-  contexts are immediately distinguishable.
+- The all-windows mode uses the active theme accent; **Dropdown** mode rotates
+  that accent toward violet, so the two contexts are immediately
+  distinguishable.
 - **Settings**: `Alt+S` / `Ctrl+S` inside the overlay (the modifier follows the
   mode), or the ⚙ button. There is no global settings shortcut, so the
   switcher never takes a key from the rest of the desktop.
@@ -53,10 +54,10 @@ The default bindings are:
 
 | Shortcut | Action |
 | --- | --- |
-| `Alt + Tab` | cycle other windows |
-| `Alt + Shift + Tab` | cycle other windows backwards |
-| `Ctrl + Tab` | cycle Dropdown windows |
-| `Ctrl + Shift + Tab` | cycle Dropdown windows backwards |
+| `Alt + Tab` | cycle other applications |
+| `Alt + Shift + Tab` | cycle other applications backwards |
+| `Ctrl + Tab` | cycle Dropdown applications |
+| `Ctrl + Shift + Tab` | cycle Dropdown applications backwards |
 
 The all-windows shortcut can also be set to Alt + backtick (reverse
 Alt + Shift + backtick) in Settings. `Super + Tab` is deliberately not offered:
