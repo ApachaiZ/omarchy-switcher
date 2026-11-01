@@ -209,8 +209,9 @@ Item {
     command: ["hyprctl", "eval", root.evalCode]
     onExited: function(exitCode) {
       root.evalRunning = false
-      var out = evalOut.text().trim()
-      var err = evalErr.text().trim()
+      // StdioCollector.text is a property in Quickshell, not a method.
+      var out = String(evalOut.text).trim()
+      var err = String(evalErr.text).trim()
       var failed = exitCode !== 0 || out.indexOf("error:") === 0
       if (failed) {
         root.status = "error"
@@ -244,7 +245,7 @@ Item {
     command: ["hyprctl", "binds", "-j"]
     onExited: function(exitCode) {
       if (exitCode === 0) {
-        var result = Model.parseBinds(bindsOut.text(),
+        var result = Model.parseBinds(String(bindsOut.text),
           Model.activeChords(root.settings, root.dropdownEnabled))
         root.conflicts = result.conflicts
         if (result.missing.length > 0 && root.attempts < 1) {

@@ -89,6 +89,11 @@ test("the bindings engine owns its shortcuts with a static-file fallback", () =>
   assert.match(source, /hyprUnbindEval/)
 })
 
+test("stdio collectors use the Quickshell text property, not a call", () => {
+  const source = readFileSync("HyprBinds.qml", "utf8")
+  assert.doesNotMatch(source, /\.text\(\)/)
+})
+
 test("IPC reports never expose window titles or app ids", () => {
   const source = readFileSync("Service.qml", "utf8")
   const ipc = source.slice(source.indexOf("IpcHandler"))
