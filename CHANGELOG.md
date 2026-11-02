@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.1
+
+### Fixed
+
+- A window whose class is an `Object` property name (`constructor`, `__proto__`,
+  `toString`, `hasOwnProperty`, …) no longer breaks application grouping. The
+  group index is now a null-prototype map, so a class is only ever matched
+  against groups that this pass created. With a plain `{}` the inherited member
+  was mistaken for an existing group, `group.entries.push` threw, and the
+  overlay never opened while that window stayed mapped.
+
 ## 0.3.0
 
 ### Added

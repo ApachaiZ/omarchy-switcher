@@ -152,7 +152,12 @@ function parseClients(raw, dropdownWindows, mode) {
 function groupEntries(entries) {
   var list = Array.isArray(entries) ? entries : []
   var groups = []
-  var byKey = {}
+  // Window classes and app ids are controlled by the window itself, so they can
+  // be any string, including Object prototype names. A null-prototype map keeps
+  // "constructor", "toString" or "__proto__" from finding an inherited value:
+  // on a plain {} that value is truthy, its entries field is undefined and the
+  // push below throws instead of starting a new group.
+  var byKey = Object.create(null)
   for (var i = 0; i < list.length; i++) {
     var entry = list[i]
     if (!entry) continue

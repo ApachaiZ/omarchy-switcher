@@ -70,6 +70,38 @@ test("windows are grouped by application in focus order", () => {
   assert.equal(Model.groupEntries(null).length, 0)
 })
 
+test("grouping tolerates classes named like Object properties", () => {
+  // A window controls its own class, so it can be "constructor" or "__proto__".
+  // Those names must start groups of their own instead of finding an inherited
+  // Object member whose entries field does not exist.
+  const entries = [
+    { addr: "0x1", cls: "constructor", appId: "", title: "a" },
+    { addr: "0x2", cls: "constructor", appId: "", title: "b" },
+    { addr: "0x3", cls: "__proto__", appId: "", title: "c" },
+    { addr: "0x4", cls: "__proto__", appId: "", title: "d" },
+    { addr: "0x5", cls: "toString", appId: "", title: "e" },
+    { addr: "0x6", cls: "hasOwnProperty", appId: "", title: "f" }
+  ]
+  const groups = Model.groupEntries(entries)
+  assert.deepEqual(groups.map((g) => g.key),
+    ["constructor", "__proto__", "toString", "hasOwnProperty"])
+  assert.deepEqual(groups[0].entries.map((e) => e.addr), ["0x1", "0x2"])
+  assert.deepEqual(groups[1].entries.map((e) => e.addr), ["0x3", "0x4"])
+  assert.equal(groups[2].entries.length, 1)
+  assert.equal(groups[3].entries.length, 1)
+  assert.equal(groups[0].label, "constructor")
+
+  // The same classes arrive through the service path: parse then group.
+  const raw = JSON.stringify([
+    { address: "0xAAA1", class: "constructor", title: "First", mapped: true },
+    { address: "0xBBB2", class: "__proto__", title: "Second", mapped: true }
+  ])
+  const list = Model.parseClients(raw, {}, "all")
+  assert.equal(list.length, 2)
+  assert.doesNotThrow(() => Model.groupEntries(list))
+  assert.equal(Model.groupEntries(list).length, 2)
+})
+
 test("initial selection is the previous window, reverse starts at the end", () => {
   assert.equal(Model.initialIndex(0, false), -1)
   assert.equal(Model.initialIndex(1, false), 0)
