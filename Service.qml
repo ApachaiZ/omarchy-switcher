@@ -268,7 +268,6 @@ Item {
     var grouped = Model.groupEntries(list)
     root.entries = list
     root.mode = root.pendingMode
-    root.pendingMode = root.mode
     root.selected = Model.initialIndex(grouped.length, root.pendingReverse)
     root.expanded = false
     root.subIndex = 0
@@ -341,24 +340,26 @@ Item {
     return group.entries[0]
   }
 
-  function cancel() {
-    if (!root.open) return
+  // Both closing paths drop the client list and the selection; only the entry
+  // that ends up activated differs.
+  function resetOverlay() {
     root.open = false
-    root.pendingEntry = null
     root.entries = []
     root.selected = -1
     root.expanded = false
     root.subIndex = 0
   }
 
+  function cancel() {
+    if (!root.open) return
+    root.pendingEntry = null
+    root.resetOverlay()
+  }
+
   function commit(target) {
     var entry = target !== undefined ? target : root.selectedWindow()
-    root.open = false
     root.pendingEntry = entry
-    root.entries = []
-    root.selected = -1
-    root.expanded = false
-    root.subIndex = 0
+    root.resetOverlay()
     if (entry) activationTimer.restart()
   }
 
@@ -460,11 +461,14 @@ Item {
   // rebuilt on every open, so memoize by app id. Bounded to keep RAM flat in
   // long sessions, and cleared when the theme changes so a new icon theme is
   // picked up without a shell restart.
-  property var iconCache: ({})
+  // Keyed by app id or window class, both of which a window can influence, so
+  // the map has no prototype: a class named "constructor" must not resolve
+  // Object's inherited member instead of an icon path.
+  property var iconCache: Object.create(null)
   property var iconCacheOrder: []
 
   function clearIconCache() {
-    root.iconCache = ({})
+    root.iconCache = Object.create(null)
     root.iconCacheOrder = []
   }
 

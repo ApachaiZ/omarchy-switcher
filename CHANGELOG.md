@@ -4,12 +4,14 @@
 
 ### Fixed
 
-- A window whose class is an `Object` property name (`constructor`, `__proto__`,
-  `toString`, `hasOwnProperty`, …) no longer breaks application grouping. The
-  group index is now a null-prototype map, so a class is only ever matched
-  against groups that this pass created. With a plain `{}` the inherited member
-  was mistaken for an existing group, `group.entries.push` threw, and the
-  overlay never opened while that window stayed mapped.
+- A window whose class or app id is an `Object` property name (`constructor`,
+  `__proto__`, `toString`, `hasOwnProperty`, …) no longer breaks the switcher.
+  The group index and the icon cache are now null-prototype maps, so such a name
+  is only ever matched against entries created during the same pass. With a
+  plain `{}` the inherited member was taken for an existing group,
+  `group.entries` was undefined, `groupEntries` threw, and the overlay never
+  opened while that window stayed mapped; the icon cache was likewise handing
+  QML a function instead of an icon path.
 
 ## 0.3.0
 
